@@ -9,7 +9,7 @@ variety of different source conditions. The field can then be calculated
 from this potential.
 
 Elliptic Equation
-Solved by relaxation method
+Solved by iterative successive over-relaxation method (SOR)
 Dirichlet boundary conditions
 Equation solved in 2D - grid spacing h
 
@@ -27,6 +27,8 @@ from numba import jit
 import matplotlib.pyplot as plt
 from collections import Counter
 
+#np.set_printoptions(threshold=np.inf)
+
 class system:
     def __init__(self,Ns):
         '''
@@ -37,7 +39,9 @@ class system:
         self.Ns = Ns
         self.h = 1./Ns
         self.grid = np.mgrid[0:1:complex(0,self.Ns),0:1:complex(0,self.Ns)]
-        self.xx,self.yy = self.grid                             
+        self.xx,self.yy = self.grid    
+        self.potentials = np.zeros(self.grid.shape[1:])      
+        self.sources = np.zeros(self.potentials.shape,dtype=np.bool)                   
     def find_closest_gridpoint(self,coords):
         '''
         Find closest point on grid to coords
@@ -73,6 +77,7 @@ class system:
             #duplicated indices - which will then reveal where the overlap is
         diff_tuples = map(tuple,diffs)
         counts = Counter(diff_tuples).most_common()
+        #print counts
         match = counts[0][0]
             #desired coordinates!
         #print "match", match
@@ -121,12 +126,150 @@ class system:
             if not args: #if only origin is specified
                 source_coords = [self.find_closest_gridpoint(origin)]            
                 
+        for coords in source_coords:
+            #print "coords",coords
+            self.potentials[coords] = potential
+            self.sources[coords] = True
+            
     def show_setup(self):
         pass
     def show(self):
         pass
-    def solve(self,method):
-        pass
+
+    def create_method_matrix(self):
+        N = self.Ns**2        
+        self.A = np.zeros((N,N))
+        boundary_conditions = []
+        for i in range(N):
+            boundaries_row = []
+            #print "i", i
+            coord1 = int(float(i)/self.Ns)
+            coord2 = i%self.Ns
+            self.A[i,i] = -4
+            for c1,c2 in zip([coord1,coord1,coord1-1,coord1+1],
+                             [coord2-1,coord2+1,coord2,coord2]):
+                #print '{:02d} {:02d} {:02d} {:02d}'.format(coord1, coord2, c1,c2)
+                try:
+                    if c1==-1 or c2==-1 or c1>self.Ns-1 or c2>self.Ns-1:
+                        raise IndexError
+                    elif c1 == coord1-1: 
+                        '''
+                        row has changed, need to move 'cell'
+                        column cannot have changed, so move 
+                        by Ns along row
+                        '''
+                        self.A[i,i-self.Ns] = 1
+                    elif c1 == coord1+1: 
+                        self.A[i,i+self.Ns] = 1
+                    elif c2 == coord2-1:
+                        self.A[i,i-1]=1
+                    elif c2 == coord2+1:
+                        self.A[i,i+1]=1
+                    else:
+                        print "error",c1,c2
+                except IndexError:
+                    boundaries_row.append((c1,c2))
+                #print self.A
+            boundary_conditions.append(boundaries_row)
+        #print self.A
+        #print boundary_conditions,len(boundary_conditions)
+        self.boundary_conditions = boundary_conditions
+        
+    def jacobi(self,tol=1e-4,max_iter=5000):
+        N = self.Ns**2  
+        self.create_method_matrix()
+        b = np.zeros(N)
+        
+        #get diagonal, D
+        D = np.diag(np.diag(self.A)) #but these are all just -4
+        L = np.tril(self.A,k=-1)
+        U = np.triu(self.A,k=1)
+        x = self.potentials.reshape(-1,)
+        orig_x = x.copy()
+        sources = self.sources.reshape(-1,)
+        D_inv = np.linalg.inv(D)
+        L_U = L+U
+        T = - np.dot(D_inv,L_U)
+        D_inv_b = np.dot(D_inv,b).reshape(-1,)
+        #print "before\n",x.reshape(self.Ns,-1)
+        for i in range(max_iter):
+            initial_norm = np.linalg.norm(x)
+            x = np.dot(T,x).reshape(-1,) + D_inv_b
+            #print "after\n",x.reshape(self.Ns,-1)
+            x[sources] = orig_x[sources]
+            final_norm = np.linalg.norm(x)
+            diff = np.abs(initial_norm-final_norm)
+            print "i,diff:",i,diff
+            if diff<tol:
+                break
+        #print "done\n",x.reshape(self.Ns,-1)
+        self.potentials = x.reshape(self.Ns,-1)
+    def SOR(self,w=1.5):
+        '''
+        A = L + D + U
+        A x = b - b are the boundary conditions
+        
+        x is arranged like:
+            u_1,1
+            u_1,2
+            u_2,1
+            u_2,2
+        
+        D is of length N^2, every element is -4, N is the number of gridpoints 
+        '''
+        N = self.Ns**2  
+        w = float(w)
+        #create array (matrix) A
+        self.create_method_matrix()
+        b = np.zeros(N)
+        
+        #get diagonal, D
+        D = np.diagonal(self.A) #but these are all just -4
+        L = np.tril(self.A,k=-1)
+        U = np.triu(self.A,k=1)
+        #print D
+        #print L
+        #print U
+        x = self.potentials.reshape(-1,)
+        sources = self.sources.reshape(-1,)
+        for i in range(2):
+            #print "before\n",x.reshape(self.Ns,-1)
+            for k in range(N):
+                if sources[k]:
+                    #print "source at:",k
+                    continue
+                #print k,N
+                s1 = 0
+                s2 = 0
+                for j in range(0,k):
+                    #print "j1:",j,L[k,j],x[j]
+                    s1 += L[k,j]*x[j]
+                for j in range(k,N):
+                    #print "j2:",j,U[k,j],x[j]
+                    s2 += U[k,j]*x[j]
+                #print L[k]
+                #print U[k]
+                #print D[k],s1,s2,b[k]
+                #print ''
+                x[k] += (w/D[k])*(-s1 -s2 + b[k])
+            #print "after\n",x.reshape(self.Ns,-1)
+            #print ''
+        self.potentials = x.reshape(self.Ns,-1)
+test = system(100)
+test.add_source(1,(0.01,0.01))
+test.add_source(2,(0.3,0.4))
+test.add_source(2,(0.6,0.9))
+test.add_source(1,(0.1,0.9))
+r = 0.4
+c = (0.5,0.5)
+v = 1.6
+for theta in np.linspace(0,2*np.pi,200):
+    test.add_source(v,(c[0]+r*np.sin(theta),c[1]+r*np.cos(theta)))
     
-test = system(6)
-test.add_source(1,(0.5,0.58))
+test.add_source(-1,(0.5,0.5))
+#print test.potentials
+test.jacobi(tol=1e-2)
+#print test.potentials
+plt.figure()
+plt.imshow(test.potentials)
+plt.tight_layout()
