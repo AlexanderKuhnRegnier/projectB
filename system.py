@@ -204,6 +204,45 @@ class system:
                 break
         #print "done\n",x.reshape(self.Ns,-1)
         self.potentials = x.reshape(self.Ns,-1)
+        
+    def gauss_seidel(self,tol=1e-2):
+        N = self.Ns**2  
+        #create array (matrix) A
+        self.create_method_matrix()
+        b = np.zeros(N)
+        
+        #get diagonal, D
+        D = np.diagonal(self.A) #but these are all just -4
+        L = np.tril(self.A,k=-1)
+        U = np.triu(self.A,k=1)
+        print D
+        print L
+        print U
+        print "determinants:"
+        det  = np.linalg.det
+        print det(L)
+        print det(L+D)
+        print det(U)
+        print det(-np.dot(L+D,U))
+        L_D_inv = np.linalg.inv(L+D)
+        L_D_inv_b = np.dot(L_D_inv,b)
+        T = -np.dot(L_D_inv,U)
+        x = self.potentials.reshape(-1,)
+        orig_x = x.copy()
+        sources = self.sources.reshape(-1,)
+        for i in range(20):
+            print "before\n",x.reshape(self.Ns,-1)
+            initial_norm = np.linalg.norm(x)
+            x = np.dot(T,x).reshape(-1,) + L_D_inv_b
+            x[sources] = orig_x[sources]
+            final_norm = np.linalg.norm(x)
+            diff = np.abs(initial_norm-final_norm)
+            print "i,diff:",i,diff
+            if diff<tol:
+                break
+            print "after\n",x.reshape(self.Ns,-1)
+            #print ''
+        self.potentials = x.reshape(self.Ns,-1)
     def SOR(self,w=1.5):
         '''
         A = L + D + U
@@ -227,13 +266,14 @@ class system:
         D = np.diagonal(self.A) #but these are all just -4
         L = np.tril(self.A,k=-1)
         U = np.triu(self.A,k=1)
-        #print D
-        #print L
-        #print U
+        print D
+        print L
+        print U
+
         x = self.potentials.reshape(-1,)
         sources = self.sources.reshape(-1,)
         for i in range(2):
-            #print "before\n",x.reshape(self.Ns,-1)
+            print "before\n",x.reshape(self.Ns,-1)
             for k in range(N):
                 if sources[k]:
                     #print "source at:",k
@@ -252,11 +292,12 @@ class system:
                 #print D[k],s1,s2,b[k]
                 #print ''
                 x[k] += (w/D[k])*(-s1 -s2 + b[k])
-            #print "after\n",x.reshape(self.Ns,-1)
+            print "after\n",x.reshape(self.Ns,-1)
             #print ''
         self.potentials = x.reshape(self.Ns,-1)
-test = system(100)
+test = system(4)
 test.add_source(1,(0.01,0.01))
+'''
 test.add_source(2,(0.3,0.4))
 test.add_source(2,(0.6,0.9))
 test.add_source(1,(0.1,0.9))
@@ -267,9 +308,13 @@ for theta in np.linspace(0,2*np.pi,200):
     test.add_source(v,(c[0]+r*np.sin(theta),c[1]+r*np.cos(theta)))
     
 test.add_source(-1,(0.5,0.5))
+'''
 #print test.potentials
-test.jacobi(tol=1e-2)
-#print test.potentials
-plt.figure()
-plt.imshow(test.potentials)
-plt.tight_layout()
+
+calc = 1
+if calc:
+    test.gauss_seidel()
+    #print test.potentials
+    plt.figure()
+    plt.imshow(test.potentials)
+    plt.tight_layout()
