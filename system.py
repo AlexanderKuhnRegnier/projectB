@@ -92,8 +92,8 @@ class system:
         (origin) of the shape, and two additional coordinates (could be more
         if irregular shapes would be implemented).
         The centre of the shapes described below is specified by the 
-        'origin' argument, with the lower left corner of the simulated space
-        defined as (0,0), and the top right corner as (1,1).
+        'origin' argument, with the top left corner of the simulated space
+        defined as (0,0), and the bottom left corner as (1,1).
         If only origin is given (ie. no non-keyword args), then a point source
         at the grid point closest to the origin is created. 
         implemented here:
@@ -205,45 +205,75 @@ class system:
         #print "done\n",x.reshape(self.Ns,-1)
         self.potentials = x.reshape(self.Ns,-1)
         
-    def gauss_seidel(self,tol=1e-2):
+    def gauss_seidel(self,tol=1e-4,max_iter=5000):
         N = self.Ns**2  
         #create array (matrix) A
         self.create_method_matrix()
         b = np.zeros(N)
         
         #get diagonal, D
-        D = np.diagonal(self.A) #but these are all just -4
+        D = np.diag(np.diag(self.A)) #but these are all just -4
         L = np.tril(self.A,k=-1)
         U = np.triu(self.A,k=1)
+        print 'D'
         print D
+        print 'L'
         print L
+        print 'U'
         print U
+        print L+D
         print "determinants:"
         det  = np.linalg.det
-        print det(L)
-        print det(L+D)
-        print det(U)
-        print det(-np.dot(L+D,U))
+        print 'L',det(L)
+        print 'L + D',det(L+D)
+        print 'U',det(U)
+        print 'L+D U',det(-np.dot(L+D,U))
+        print 'L + D'
+        print L+D
         L_D_inv = np.linalg.inv(L+D)
+        print 'L+D inv'
+        print L_D_inv
         L_D_inv_b = np.dot(L_D_inv,b)
+        print 'L+D inv b'
+        print L_D_inv_b
+        
+        print 'L+D inv dot L+D'
+        print np.dot(L_D_inv,L+D)
         T = -np.dot(L_D_inv,U)
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
+        print "x"
+        print x
         sources = self.sources.reshape(-1,)
-        for i in range(20):
-            print "before\n",x.reshape(self.Ns,-1)
+        print "T",T.shape
+        print T
+        
+        print 'L D inv'
+        print L_D_inv
+        print 'U x'
+        print np.dot(U,x)
+        print 'b - U x'
+        print b- np.dot(U,x)
+        
+        print 'seeding x with random potentials'
+        x = np.random.random(x.shape)
+        x[sources] = orig_x[sources]
+        
+        for i in range(max_iter):
+            #print "before\n",x.reshape(self.Ns,-1)
             initial_norm = np.linalg.norm(x)
             x = np.dot(T,x).reshape(-1,) + L_D_inv_b
             x[sources] = orig_x[sources]
+            #print "sources",x[sources]
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
+            #print "after\n",x.reshape(self.Ns,-1)
             print "i,diff:",i,diff
             if diff<tol:
-                break
-            print "after\n",x.reshape(self.Ns,-1)
+                break            
             #print ''
         self.potentials = x.reshape(self.Ns,-1)
-    def SOR(self,w=1.5):
+    def SOR(self,w=1.5,tol=1e-4,max_iter=5000):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -269,11 +299,18 @@ class system:
         print D
         print L
         print U
-
+        
         x = self.potentials.reshape(-1,)
+        orig_x = x.copy()
         sources = self.sources.reshape(-1,)
-        for i in range(2):
-            print "before\n",x.reshape(self.Ns,-1)
+        print 'seeding x with random potentials'
+        x = np.random.random(x.shape)
+        x = np.ones(x.shape)
+        x[sources] = orig_x[sources]
+
+        for i in range(max_iter):
+            initial_norm = np.linalg.norm(x)
+            #print "before\n",x.reshape(self.Ns,-1)
             for k in range(N):
                 if sources[k]:
                     #print "source at:",k
@@ -284,20 +321,25 @@ class system:
                 for j in range(0,k):
                     #print "j1:",j,L[k,j],x[j]
                     s1 += L[k,j]*x[j]
-                for j in range(k,N):
+                for j in range(k+1,N):
                     #print "j2:",j,U[k,j],x[j]
                     s2 += U[k,j]*x[j]
                 #print L[k]
                 #print U[k]
                 #print D[k],s1,s2,b[k]
                 #print ''
-                x[k] += (w/D[k])*(-s1 -s2 + b[k])
-            print "after\n",x.reshape(self.Ns,-1)
+                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+            #print "after\n",x.reshape(self.Ns,-1)
+            final_norm = np.linalg.norm(x)
+            diff = np.abs(initial_norm-final_norm)    
+            print "i,diff:",i,diff
+            if diff<tol:
+                break                   
             #print ''
         self.potentials = x.reshape(self.Ns,-1)
-test = system(4)
+test = system(40)
 test.add_source(1,(0.01,0.01))
-'''
+
 test.add_source(2,(0.3,0.4))
 test.add_source(2,(0.6,0.9))
 test.add_source(1,(0.1,0.9))
@@ -308,13 +350,15 @@ for theta in np.linspace(0,2*np.pi,200):
     test.add_source(v,(c[0]+r*np.sin(theta),c[1]+r*np.cos(theta)))
     
 test.add_source(-1,(0.5,0.5))
-'''
-#print test.potentials
 
+#print test.potentials
+plt.close('all')
 calc = 1
 if calc:
-    test.gauss_seidel()
+    test.SOR()
     #print test.potentials
     plt.figure()
     plt.imshow(test.potentials)
     plt.tight_layout()
+    plt.colorbar()
+    plt.show()
