@@ -218,8 +218,9 @@ class System:
         plt.title('Sources')
         plt.imshow(self.source_potentials)
         plt.colorbar()
+        plt.tight_layout()
         plt.show()
-    def show(self):
+    def show(self,title=''):
         '''
         Show the calculated potential
         '''
@@ -227,6 +228,9 @@ class System:
         plt.title('Potential')
         plt.imshow(self.potentials)
         plt.colorbar()
+        plt.tight_layout()
+        if title:
+            plt.title(title)
         plt.show()
     def create_method_matrix(self):
         N = self.Ns**2
@@ -272,6 +276,10 @@ class System:
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
+        #randomise starting potential
+        x = np.random.random(x.shape)
+        x[sources] = orig_x[sources]    
+        #randomise starting potential
         D_inv = np.linalg.inv(D)
         L_U = L+U
         T = - np.dot(D_inv, L_U)
@@ -305,8 +313,10 @@ class System:
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
+        #randomise starting potential
         x = np.random.random(x.shape)
-        x[sources] = orig_x[sources]
+        x[sources] = orig_x[sources]    
+        #randomise starting potential
 
         for i in range(max_iter):
             #print "before\n",x.reshape(self.Ns,-1)
@@ -353,8 +363,10 @@ class System:
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
+        #randomise starting potential
         x = np.random.random(x.shape)
-        x[sources] = orig_x[sources]
+        x[sources] = orig_x[sources]    
+        #randomise starting potential
         '''
         for i in range(max_iter):
             initial_norm = np.linalg.norm(x)
@@ -375,59 +387,54 @@ class System:
             if diff < tol:
                 break
         '''
-        x = SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose)
+        x = self.SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose)
         self.potentials = x.reshape(self.Ns,-1)
-@jit(nopython=True)
-def SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose):
-    for i in range(max_iter):
-        initial_norm = np.linalg.norm(x)
-        for k in range(N):
-            if sources[k]:
-                continue
-            s1 = 0
-            s2 = 0
-            for j in range(0,k):
-                s1 += L[k,j]*x[j]
-            for j in range(k+1,N):
-                s2 += U[k,j]*x[j]
-            x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
-        final_norm = np.linalg.norm(x)
-        diff = np.abs(initial_norm-final_norm)
-        if verbose:
-            print("i,diff:",i,diff)
-        if diff < tol:
-            break  
-    return x
-Ns = 22
-test = System(Ns)
-# test.add(Shape(30,1,(0.01,0.01)))
-# test.add(Shape(30,1.2,(0.9,0.9)))
-test.add(Shape(Ns,-1.3,(0.5,0.5),0.18,shape='circle',filled=False))
-#test.add(Shape(Ns,1.8,(0.5,0.5),0.1,shape='circle',filled=False))
-#test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='circle',filled=False))
-# print test.potentials
-plt.close('all')
-calc = 1
-if calc:
-     print('SOR')
-     test.SOR(tol=1e-14,max_iter=1000)
-     plt.figure()
-     plt.imshow(test.potentials)
-     plt.tight_layout()
-     plt.colorbar()
+        
+    @staticmethod 
+    @jit(nopython=True)
+    def SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose):
+        for i in range(max_iter):
+            initial_norm = np.linalg.norm(x)
+            for k in range(N):
+                if sources[k]:
+                    continue
+                s1 = 0
+                s2 = 0
+                for j in range(0,k):
+                    s1 += L[k,j]*x[j]
+                for j in range(k+1,N):
+                    s2 += U[k,j]*x[j]
+                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+            final_norm = np.linalg.norm(x)
+            diff = np.abs(initial_norm-final_norm)
+            if verbose:
+                print("i,diff:",i,diff)
+            if diff < tol:
+                break  
+        return x
 
-#     print 'Jacobi'
-#     test.jacobi(tol=1e-10,max_iter=1)
-#     plt.figure()
-#     plt.imshow(test.potentials)
-#     plt.tight_layout()
-#     plt.colorbar()
-
-#    print 'Gauss Seidel'
-#    test.gauss_seidel(max_iter=300)
-#    plt.figure()
-#    plt.imshow(test.potentials)
-#    plt.tight_layout()
-#    plt.colorbar()
-
-#    plt.show()
+if __name__ == '__main__':        
+    Ns = 60
+    test = System(Ns)
+    # test.add(Shape(30,1,(0.01,0.01)))
+    # test.add(Shape(30,1.2,(0.9,0.9)))
+    test.add(Shape(Ns,-1.3,(0.5,0.5),0.18,shape='circle',filled=False))
+    test.add(Shape(Ns,1.8,(0.5,0.5),0.1,shape='circle',filled=False))
+    test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='circle',filled=False))
+    # print test.potentials
+    
+    #plt.close('all')
+    
+    calc = 1
+    tol = 1e-14
+    max_iter = 4000
+    show = True
+    methods = [test.SOR,test.jacobi,test.gauss_seidel]
+    #methods = [test.SOR]
+    names = [f.__name__ for f in methods]
+    if calc:
+        for name,f in zip(names,methods):
+            print(name)
+            f(tol=tol,max_iter=max_iter)
+            if show:
+                test.show(title=name)
