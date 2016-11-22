@@ -48,6 +48,7 @@ class Shape:
         Find closest point on grid to coords
         '''
         coords = np.array(coords).reshape(-1,)
+#        print('coords:',coords)
         # make sure coords have correct shape for next step
         # really necessary (could have assert)?
         coords = coords[(slice(None),)+(None,)*coords.shape[0]]
@@ -122,12 +123,18 @@ class Shape:
 No shape has been added, please refer to function
 documentation""".format(len(args),shape))
 
-        if shape == 'rectangle':
-            if len(args) == 2:
-                print ("Adding rectangle centred at {:} with "
-                       "width: {:}, height: {:}".format(origin,args[0],args[1]))
+        if shape == 'rectangle' or shape == 'square':
+            if 1 <= len(args) <= 2:
                 width = args[0]
-                height = args[1]
+                if len(args) == 1:
+                    height = width
+                else:
+                    height = args[1]
+                    
+                print ("Adding {:} centred at {:} with "
+                       "width: {:.3f}, height: {:.3f}".format(shape,origin,
+                                                        width,height))
+
                 vertices = []
                 min_x = origin[0]-width/2.
                 max_x = origin[0]+width/2.
@@ -136,16 +143,30 @@ documentation""".format(len(args),shape))
                 for x,y in zip((min_x,min_x,max_x,max_x,min_x),
                                 (min_y,max_y,max_y,min_y,min_y)):
                     vertices.append((x,y))
+
+#                print(min_x,max_x,min_y,max_y)                    
+#                print('vertices: ')
+#                print(vertices)
+                
                 for vertex1,vertex2 in zip(vertices[:-1],vertices[1:]):
                     x1 = vertex1[0]
                     x2 = vertex2[0]
                     y1 = vertex1[1]
                     y2 = vertex2[1]
+                    '''
+                    Had to add '+self.h' to the end argument, since 
+                    occasionally a grid point would be overlooked due to
+                    the ordering of the traversal
+                    '''
                     if x1==x2:
-                        for y in np.arange(min((y1,y2)),max((y1,y2)),self.h):
+#                        print('min max y ',min((y1,y2)),max((y1,y2)))
+#                        print('x1 ',x1)
+                        for y in np.arange(min((y1,y2)),max((y1,y2))+self.h,self.h):
                             self.add_source((x1,y))
                     elif y1==y2:
-                        for x in np.arange(min((x1,x2)),max((x1,x2)),self.h):
+#                        print('min max x',min((x1,x2)),max((x1,x2)))
+#                        print('y1 ',y1)
+                        for x in np.arange(min((x1,x2)),max((x1,x2))+self.h,self.h):
                             self.add_source((x,y1))
                     else:
                         print("vertices do not lie along straight lines!")
@@ -367,26 +388,7 @@ class System:
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]    
         #randomise starting potential
-        '''
-        for i in range(max_iter):
-            initial_norm = np.linalg.norm(x)
-            for k in range(N):
-                if sources[k]:
-                    continue
-                s1 = 0
-                s2 = 0
-                for j in range(0,k):
-                    s1 += L[k,j]*x[j]
-                for j in range(k+1,N):
-                    s2 += U[k,j]*x[j]
-                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
-            final_norm = np.linalg.norm(x)
-            diff = np.abs(initial_norm-final_norm)
-            if verbose:
-                print("i,diff:",i,diff)
-            if diff < tol:
-                break
-        '''
+
         x = self.SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose)
         self.potentials = x.reshape(self.Ns,-1)
         
@@ -413,6 +415,66 @@ class System:
                 break  
         return x
 
+    def SOR_anim(self, w=1.5, tol=1e-3, max_iter=5000, verbose=True):
+        '''
+        Equivalent to SOR except for the fact that it returns an array
+        of all the potentials calculated along the way, for later
+        plotting.
+        '''
+        N = self.Ns**2
+        w = float(w)
+        # create array (matrix) A
+        self.create_method_matrix()
+        b = np.zeros(N) #boundary conditions around edges
+        # get diagonal, D
+        D = np.diagonal(self.A) #but these are all just -4
+        L = np.tril(self.A,k=-1)
+        U = np.triu(self.A,k=1)
+        x = self.potentials.reshape(-1,)
+        orig_x = x.copy()
+        sources = self.sources.reshape(-1,)
+        '''
+        better choice than random initial state needs to be found!
+        could use pre-conditioning with coarse grid, which is initialised
+        with
+        '''
+        #randomise starting potential
+        x = np.random.random(x.shape)
+        x[sources] = orig_x[sources]    
+        #randomise starting potential
+
+        x, all_potentials = self.SOR_sub_func_anim(max_iter, x, N, sources, L, 
+                                                   U, w, D, b, tol, verbose)
+        self.potentials = x.reshape(self.Ns,-1)
+        return all_potentials
+        
+    @staticmethod 
+    @jit(nopython=True)
+    def SOR_sub_func_anim(max_iter, x, N, sources, L, 
+                          U, w, D, b, tol, verbose):
+        Ns = int(N**0.5)
+        all_potentials = np.zeros((max_iter, Ns, Ns))
+        for i in range(max_iter):
+            all_potentials[i] = x.reshape(Ns,Ns)
+            initial_norm = np.linalg.norm(x)
+            for k in range(N):
+                if sources[k]:
+                    continue
+                s1 = 0
+                s2 = 0
+                for j in range(0,k):
+                    s1 += L[k,j]*x[j]
+                for j in range(k+1,N):
+                    s2 += U[k,j]*x[j]
+                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+            final_norm = np.linalg.norm(x)
+            diff = np.abs(initial_norm-final_norm)
+            if verbose:
+                print("i,diff:",i,diff)
+            if diff < tol:
+                break  
+        return x,all_potentials[:i+1,...]
+        
 if __name__ == '__main__':        
     Ns = 60
     test = System(Ns)

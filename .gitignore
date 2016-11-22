@@ -90,3 +90,9 @@ ENV/
 
 #images
 *.png
+
+#executables
+*.exe
+
+#mobies
+*.mp4
