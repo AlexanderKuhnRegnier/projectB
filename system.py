@@ -21,11 +21,11 @@ Can be combined into a matrix so that the entire system can be solved
 using the relaxation method.
 
 """
+from __future__ import print_function
 from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
-
 # np.set_printoptions(threshold=np.inf)
 
 class Shape:
@@ -148,15 +148,15 @@ documentation""".format(len(args),shape))
                         for x in np.arange(min((x1,x2)),max((x1,x2)),self.h):
                             self.add_source((x,y1))
                     else:
-                        print "vertices do not lie along straight lines!"
+                        print("vertices do not lie along straight lines!")
                 if filled:
                     self.fill()
             else:
-                print not_implemented_message
+                print(not_implemented_message)
         if shape == 'circle':
             if len(args) == 1:
-                print "Adding circle centred at {:} with radius {:}".format(
-                origin,args[0])
+                print("Adding circle centred at {:} with radius {:}".format(
+                origin,args[0]))
                 # interval of angles calculated so that every grid point
                 # should be covered ~1-2 times for a given radius, to make
                 # sure that every grid point is covered
@@ -168,7 +168,7 @@ documentation""".format(len(args),shape))
                 if filled:
                     self.fill()
             else:
-                print not_implemented_message
+                print(not_implemented_message)
     def fill(self):
         '''
         fill shape row-wise, assigning the same potential throughout
@@ -256,7 +256,7 @@ class System:
                     elif c2 == coord2+1:
                         self.A[i,i+1]=1
                     else:
-                        print "error",c1,c2
+                        print("error",c1,c2)
                 except IndexError:
                     boundaries_row.append((c1,c2))
             boundary_conditions.append(boundaries_row)
@@ -276,7 +276,7 @@ class System:
         L_U = L+U
         T = - np.dot(D_inv, L_U)
         D_inv_b = np.dot(D_inv, b).reshape(-1,)
-        print "Jacobi: finished creating matrices"
+        print("Jacobi: finished creating matrices")
         for i in range(max_iter):
             initial_norm = np.linalg.norm(x)
             x = np.dot(T,x).reshape(-1,) + D_inv_b
@@ -284,7 +284,7 @@ class System:
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
-                print "i,diff:",i,diff
+                print("i,diff:",i,diff)
             if diff < tol:
                 break
         self.potentials = x.reshape(self.Ns,-1)
@@ -301,7 +301,7 @@ class System:
         L_D_inv = np.linalg.inv(L+D)
         L_D_inv_b = np.dot(L_D_inv,b)
         T = -np.dot(L_D_inv,U)
-        print "Gauss Seidel: finished creating matrices"
+        print("Gauss Seidel: finished creating matrices")
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
@@ -318,7 +318,7 @@ class System:
             diff = np.abs(initial_norm-final_norm)
             #print "after\n",x.reshape(self.Ns,-1)
             if verbose:
-                print "i,diff:",i,diff
+                print("i,diff:",i,diff)
             if diff < tol:
                 break
             #print ''
@@ -355,7 +355,7 @@ class System:
         '''
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]
-
+        '''
         for i in range(max_iter):
             initial_norm = np.linalg.norm(x)
             for k in range(N):
@@ -371,40 +371,63 @@ class System:
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
-                print "i,diff:",i,diff
+                print("i,diff:",i,diff)
             if diff < tol:
                 break
+        '''
+        x = SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose)
         self.potentials = x.reshape(self.Ns,-1)
-
-Ns = 100
+@jit(nopython=True)
+def SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose):
+    for i in range(max_iter):
+        initial_norm = np.linalg.norm(x)
+        for k in range(N):
+            if sources[k]:
+                continue
+            s1 = 0
+            s2 = 0
+            for j in range(0,k):
+                s1 += L[k,j]*x[j]
+            for j in range(k+1,N):
+                s2 += U[k,j]*x[j]
+            x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+        final_norm = np.linalg.norm(x)
+        diff = np.abs(initial_norm-final_norm)
+        if verbose:
+            print("i,diff:",i,diff)
+        if diff < tol:
+            break  
+    return x
+Ns = 22
 test = System(Ns)
 # test.add(Shape(30,1,(0.01,0.01)))
 # test.add(Shape(30,1.2,(0.9,0.9)))
-test.add(Shape(Ns,1,(0.2,0.3),0.1,0.2,shape='rectangle'))
-test.add(Shape(Ns,1,(0.9,0.9),0.1,shape='circle'))
+test.add(Shape(Ns,-1.3,(0.5,0.5),0.18,shape='circle',filled=False))
+#test.add(Shape(Ns,1.8,(0.5,0.5),0.1,shape='circle',filled=False))
+#test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='circle',filled=False))
 # print test.potentials
 plt.close('all')
 calc = 1
 if calc:
-    # print 'SOR'
-    # test.SOR(tol=1e-10,max_iter=1)
-    # plt.figure()
-    # plt.imshow(test.potentials)
-    # plt.tight_layout()
-    # plt.colorbar()
+     print('SOR')
+     test.SOR(tol=1e-14,max_iter=1000)
+     plt.figure()
+     plt.imshow(test.potentials)
+     plt.tight_layout()
+     plt.colorbar()
 
-    # print 'Jacobi'
-    # test.jacobi(tol=1e-10,max_iter=1)
-    # plt.figure()
-    # plt.imshow(test.potentials)
-    # plt.tight_layout()
-    # plt.colorbar()
+#     print 'Jacobi'
+#     test.jacobi(tol=1e-10,max_iter=1)
+#     plt.figure()
+#     plt.imshow(test.potentials)
+#     plt.tight_layout()
+#     plt.colorbar()
 
-    print 'Gauss Seidel'
-    test.gauss_seidel(max_iter=300)
-    plt.figure()
-    plt.imshow(test.potentials)
-    plt.tight_layout()
-    plt.colorbar()
+#    print 'Gauss Seidel'
+#    test.gauss_seidel(max_iter=300)
+#    plt.figure()
+#    plt.imshow(test.potentials)
+#    plt.tight_layout()
+#    plt.colorbar()
 
-    plt.show()
+#    plt.show()
