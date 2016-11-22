@@ -124,8 +124,8 @@ documentation""".format(len(args),shape))
 
         if shape == 'rectangle':
             if len(args) == 2:
-                print "Adding rectangle, width: {:}, height: {:}".format(
-                                                            args[0],args[1])
+                print ("Adding rectangle centred at {:} with "
+                       "width: {:}, height: {:}".format(origin,args[0],args[1]))
                 width = args[0]
                 height = args[1]
                 vertices = []
@@ -376,15 +376,15 @@ class System:
                 break
         self.potentials = x.reshape(self.Ns,-1)
 
-Ns = 5
+Ns = 100
 test = System(Ns)
 # test.add(Shape(30,1,(0.01,0.01)))
 # test.add(Shape(30,1.2,(0.9,0.9)))
-# test.add(Shape(Ns,1,(0.8,0.3),0.1,0.2,shape='rectangle'))
+test.add(Shape(Ns,1,(0.2,0.3),0.1,0.2,shape='rectangle'))
 test.add(Shape(Ns,1,(0.9,0.9),0.1,shape='circle'))
-print test.potentials
+# print test.potentials
 plt.close('all')
-calc = 0
+calc = 1
 if calc:
     # print 'SOR'
     # test.SOR(tol=1e-10,max_iter=1)
@@ -401,7 +401,7 @@ if calc:
     # plt.colorbar()
 
     print 'Gauss Seidel'
-    test.gauss_seidel()
+    test.gauss_seidel(max_iter=300)
     plt.figure()
     plt.imshow(test.potentials)
     plt.tight_layout()
