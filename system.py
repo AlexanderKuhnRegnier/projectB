@@ -354,7 +354,7 @@ class System:
                 break
             #print ''
         self.potentials = x.reshape(self.Ns, -1)
-    def SOR(self, w=1.5, tol=1e-3, max_iter=5000, verbose=True):
+    def SOR(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -367,50 +367,49 @@ class System:
 
         D is of length N^2, every element is -4, N is the number of gridpoints
         '''
-        N = self.Ns**2
+        Ns = self.Ns
         w = float(w)
-        # create array (matrix) A
-        self.create_method_matrix()
-        b = np.zeros(N) #boundary conditions around edges
-        # get diagonal, D
-        D = np.diagonal(self.A) #but these are all just -4
-        L = np.tril(self.A,k=-1)
-        U = np.triu(self.A,k=1)
-        x = self.potentials.reshape(-1,)
-        orig_x = x.copy()
-        sources = self.sources.reshape(-1,)
+        sources = self.sources
+        '''
+        Create array to contain the potential, including a boundary -
+        the boundary conditions, which are never altered during the program's
+        execution.
+        Then 'fill in' the potential at the center of this matrix
+        '''
+        x = np.zeros((Ns+2,Ns+2))
+        #randomise starting potential
+        x_seed = np.random.random(self.potentials.shape)
+        x_seed[sources] = self.source_potentials[sources]    
+        #randomise starting potential        
+        x[1:-1,1:-1] = x_seed     
         '''
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        #randomise starting potential
-        x = np.random.random(x.shape)
-        x[sources] = orig_x[sources]    
-        #randomise starting potential
-
-        x = self.SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose)
-        self.potentials = x.reshape(self.Ns,-1)
+        print('x', x)
+        x = self.SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose)
+        self.potentials = x[1:-1,1:-1]
         
-    @staticmethod 
+    @staticmethod
     @jit(nopython=True)
-    def SOR_sub_func(max_iter,x,N,sources,L,U,w,D,b,tol,verbose):
-        for i in range(max_iter):
+    def SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose):
+        for iteration in range(max_iter):
             initial_norm = np.linalg.norm(x)
-            for k in range(N):
-                if sources[k]:
-                    continue
-                s1 = 0
-                s2 = 0
-                for j in range(0,k):
-                    s1 += L[k,j]*x[j]
-                for j in range(k+1,N):
-                    s2 += U[k,j]*x[j]
-                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+            for i in range(0,Ns):
+                i += 1
+                for j in range(0,Ns):
+                    j += 1
+                    if sources[i-1,j-1]:
+                        continue
+                    x[i,j] = (1.-w)*x[i,j] + (w/(4.)) *(x[i,j+1]+
+                                                        x[i,j-1]+
+                                                        x[i+1,j]+
+                                                        x[i-1,j])
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
-                print("i,diff:",i,diff)
+                print("iteration, diff:",iteration,diff)
             if diff < tol:
                 break  
         return x
@@ -476,10 +475,10 @@ class System:
         return x,all_potentials[:i+1,...]
         
 if __name__ == '__main__':        
-    Ns = 60
+    Ns = 350
     test = System(Ns)
     # test.add(Shape(30,1,(0.01,0.01)))
-    # test.add(Shape(30,1.2,(0.9,0.9)))
+    #test.add(Shape(Ns,1.2,(0.9,0.9),0,4))
     test.add(Shape(Ns,-1.3,(0.5,0.5),0.18,shape='circle',filled=False))
     test.add(Shape(Ns,1.8,(0.5,0.5),0.1,shape='circle',filled=False))
     test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='circle',filled=False))
@@ -489,10 +488,10 @@ if __name__ == '__main__':
     
     calc = 1
     tol = 1e-14
-    max_iter = 4000
+    max_iter = 100
     show = True
-    methods = [test.SOR,test.jacobi,test.gauss_seidel]
-    #methods = [test.SOR]
+    #methods = [test.SOR,test.jacobi,test.gauss_seidel]
+    methods = [test.SOR]
     names = [f.__name__ for f in methods]
     if calc:
         for name,f in zip(names,methods):

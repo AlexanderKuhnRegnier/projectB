@@ -36,7 +36,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-Ns = 50
+Ns = 140
 square_coaxial_cable = Shape(Ns,1,(0.5,0.5),1./6,shape='square',filled=True)
 cable = System(Ns)
 cable.add(square_coaxial_cable)
@@ -48,14 +48,14 @@ cable.add(square_coaxial_cable)
 #cable.SOR(w=1.,tol=1e-4,max_iter=100000)
 #cable.show()
 
-frames = 150
+frames = 10
 
 all_potentials = cable.SOR_anim(tol=0,max_iter=frames)
 plt.ioff()
 fig,ax = plt.subplots(figsize=(15,15))
-image = plt.imshow(all_potentials[0],
+image = plt.imshow(all_potentials[-1],
                    vmin = np.min(all_potentials), vmax=np.max(all_potentials),
-                    interpolation = 'hermite',
+                    interpolation = 'none',
                     aspect='equal',extent=None
                     )
 iter_text = ax.set_title('')
@@ -67,10 +67,14 @@ def update_image(*args):
     image.set_array(all_potentials[args[0]])
     return image,iter_text
 
-ani = animation.FuncAnimation(fig,update_image,blit=False,frames=frames,
-                              interval=200, repeat=False,repeat_delay=500)
+anim = False
 
-save = True
+if anim:
+
+    ani = animation.FuncAnimation(fig,update_image,blit=False,frames=frames,
+                                  interval=200, repeat=False,repeat_delay=500)
+
+save = False
 
 if save:
     import os
