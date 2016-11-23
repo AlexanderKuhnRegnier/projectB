@@ -56,50 +56,14 @@ class Shape:
         # reshape to (2,1,1) or (3,1,1,1) etc. for correct
         # broadcasting
         abs_diff = np.abs(self.grid - coords)
+        match = []
         N_dim = self.grid.shape[0]
-        diffs = (np.array([np.min(abs_diff[0]),np.min(abs_diff[1])]).
-                reshape(2,)[slice(None),None,None])
-#        print(diffs)
-#        print(abs_diff.shape)
-        sub = abs_diff - diffs        
-        rows = abs_diff.shape[1]
-        columns = abs_diff.shape[2]        
-        match = self.match_func(N_dim,sub,rows,columns)
-        match = map(int,match)
-#        print('match returned:',match)
+        for i in range(N_dim):
+            index = np.where(abs_diff[i]==np.min(abs_diff[i]))[i][0]
+            match.append(int(index))
+        print('match:',match)
         return match
         
-    @staticmethod
-    @jit(nopython=True)
-    def match_func(N_dim,sub,rows,columns):
-        '''
-        find row number of minimum (absolute) differences in
-        grid[0] which stores the x coordinates, and find the
-        min column for grid[1], which stores the y coords
-        '''
-#        diff = np.where(abs_diff[i]==np.min(abs_diff[i]))
-        match = np.zeros(2,dtype=np.int64)
-        FOUND = False
-        subx = sub[0]
-        suby = sub[1]
-        for i in range(rows):
-#            print('i',i)
-            subx_row = subx[i]
-            suby_row = suby[i]
-            for j in range(columns):
-                cell1 = subx_row[j]
-                cell2 = suby_row[j]
-                if cell1<1e-15 and cell2<1e-15:
-                    match = np.array([i,j],dtype=np.int64)
-                    FOUND = True
-                if FOUND:
-#                    print('break1')
-                    break
-            if FOUND:
-#                print('break2')
-                break            
-            
-        return match
     def add_source(self,origin,*args,**kwargs):
         '''
         *args: coord1[,coord2]
@@ -268,7 +232,7 @@ class System:
         '''
         plt.figure()
         plt.title('Sources')
-        plt.imshow(self.source_potentials,**fargs)
+        plt.imshow(self.source_potentials,origin='lower',**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -280,7 +244,7 @@ class System:
         '''
         plt.figure()
         plt.title('Potential')
-        plt.imshow(self.potentials,**fargs)
+        plt.imshow(self.potentials,origin='lower',**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:

@@ -37,8 +37,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time
 start = time.clock()
-Ns = 200
-square_coaxial_cable = Shape(Ns,1,(0.54,0.5),0.5,shape='square')
+Ns = 300
+square_coaxial_cable = Shape(Ns,1,(0.5,0.5),(1/3.),shape='square')
 cable = System(Ns)
 cable.add(square_coaxial_cable)
 
@@ -49,9 +49,9 @@ tol = 1e-3
 max_iter = 100000
 
 frames = 100
-anim = True
+anim = False
 save = False
-show = False
+show = True
 if anim:
     all_potentials = cable.SOR_anim(tol=0,max_iter=frames)
     plt.ioff()
@@ -59,7 +59,8 @@ if anim:
     image = plt.imshow(all_potentials[0],
                        vmin = np.min(all_potentials), vmax=np.max(all_potentials),
                         interpolation = 'none',
-                        aspect='equal',extent=None)
+                        aspect='equal',extent=None,
+                        origin='lower')
     iter_text = ax.set_title('')
     plt.colorbar()
     
