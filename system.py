@@ -55,8 +55,15 @@ class Shape:
         # reshape to (2,1,1) or (3,1,1,1) etc. for correct
         # broadcasting
         abs_diff = np.abs(self.grid - coords)
+        N_dim = self.grid.shape[0]
+        match = self.match_func(N_dim,abs_diff)
+        return match
+        
+    @staticmethod
+    @jit(nopython=False)
+    def match_func(N_dim,abs_diff):
         diff_list = []
-        for i in range(self.grid.shape[0]):
+        for i in range(N_dim):
             '''
             find row number of minimum (absolute) differences in
             grid[0] which stores the x coordinates, and find the
@@ -67,9 +74,22 @@ class Shape:
         diffs = np.hstack(diff_list).T
         # .T so the rows can be iterrated over in order to find the
         # duplicated indices - which will then reveal where the overlap is
-        diff_tuples = map(tuple,diffs)
-        counts = Counter(diff_tuples).most_common()
-        match = counts[0][0]
+
+#        diff_tuples = map(tuple,diffs)
+        #print('diffs:',diffs,diffs.shape)
+#        counts = Counter(diff_tuples).most_common()
+#        match = counts[0][0]
+        rows = diffs.shape[0]
+        match = [-1,-1]
+        for i in range(rows):
+            for j in range(rows):
+                if i != j:
+                    #print('diff i j:',diffs[i],diffs[j])
+                    if diffs[i][0] == diffs[j][0] and diffs[i][1] == diffs[j][1]:
+                        match = diffs[i]
+                        #print('match:',match)
+            if match[0] != -1:
+                break
         # desired coordinates (grid coordinates)
         return match
     def add_source(self,origin,*args,**kwargs):
@@ -99,7 +119,10 @@ class Shape:
                         coord1 is the radius
         '''
         if not args: #if only origin is specified
-            source_coords = self.find_closest_gridpoint(origin)
+            #need to convert list to tuple below so that the right kind of
+            #indexing is triggered
+            source_coords = tuple(self.find_closest_gridpoint(origin))
+            print('source coords:',source_coords)
             self.potentials[source_coords] = self.potential
             self.sources[source_coords] = True
             self.source_potentials[source_coords] = self.potential
@@ -231,23 +254,25 @@ class System:
         self.potentials += shape_instance.potentials
         self.sources += shape_instance.sources
         self.source_potentials += shape_instance.source_potentials
-    def show_setup(self):
+    def show_setup(self,title='',**fargs):
         '''
         Show the sources in the system
         '''
         plt.figure()
         plt.title('Sources')
-        plt.imshow(self.source_potentials)
+        plt.imshow(self.source_potentials,**fargs)
         plt.colorbar()
         plt.tight_layout()
+        if title:
+            plt.title(title)        
         plt.show()
-    def show(self,title=''):
+    def show(self,title='',**fargs):
         '''
         Show the calculated potential
         '''
         plt.figure()
         plt.title('Potential')
-        plt.imshow(self.potentials)
+        plt.imshow(self.potentials,**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -387,7 +412,6 @@ class System:
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        print('x', x)
         x = self.SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose)
         self.potentials = x[1:-1,1:-1]
         
@@ -397,15 +421,30 @@ class System:
         for iteration in range(max_iter):
             initial_norm = np.linalg.norm(x)
             for i in range(0,Ns):
-                i += 1
+                i_1 = i+1
                 for j in range(0,Ns):
-                    j += 1
-                    if sources[i-1,j-1]:
+                    j_1 = j+1
+                    if sources[i,j]:
                         continue
-                    x[i,j] = (1.-w)*x[i,j] + (w/(4.)) *(x[i,j+1]+
-                                                        x[i,j-1]+
-                                                        x[i+1,j]+
-                                                        x[i-1,j])
+                    '''
+                    Need:
+                        i_1
+                        i_1-1 -> i
+                        i_1+1
+                        j_1
+                        j_1-1 -> j
+                        j_1+1
+                    combinations:
+                        i_1,j_1+1
+                        i_1,j_1-1
+                        i_1+1,j_1
+                        i_1-1,j_1
+                        these are transformed as above (needs fewer operations)
+                    '''
+                    x[i_1,j_1] = (1.-w)*x[i_1,j_1] + (w/(4.)) *(x[i_1,j_1+1]+
+                                                                x[i_1,j]+
+                                                                x[i_1+1,j_1]+
+                                                                x[i,j_1])
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
@@ -420,59 +459,69 @@ class System:
         of all the potentials calculated along the way, for later
         plotting.
         '''
-        N = self.Ns**2
+        Ns = self.Ns
         w = float(w)
-        # create array (matrix) A
-        self.create_method_matrix()
-        b = np.zeros(N) #boundary conditions around edges
-        # get diagonal, D
-        D = np.diagonal(self.A) #but these are all just -4
-        L = np.tril(self.A,k=-1)
-        U = np.triu(self.A,k=1)
-        x = self.potentials.reshape(-1,)
-        orig_x = x.copy()
-        sources = self.sources.reshape(-1,)
+        sources = self.sources
+        '''
+        Create array to contain the potential, including a boundary -
+        the boundary conditions, which are never altered during the program's
+        execution.
+        Then 'fill in' the potential at the center of this matrix
+        '''
+        x = np.zeros((Ns+2,Ns+2))
+        #randomise starting potential
+        x_seed = np.random.random(self.potentials.shape)
+        x_seed[sources] = self.source_potentials[sources]    
+        #randomise starting potential        
+        x[1:-1,1:-1] = x_seed     
         '''
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        #randomise starting potential
-        x = np.random.random(x.shape)
-        x[sources] = orig_x[sources]    
-        #randomise starting potential
-
-        x, all_potentials = self.SOR_sub_func_anim(max_iter, x, N, sources, L, 
-                                                   U, w, D, b, tol, verbose)
-        self.potentials = x.reshape(self.Ns,-1)
+        x, all_potentials = self.SOR_sub_func_anim(max_iter,x,Ns,sources,w,tol,verbose)
+        self.potentials = x[1:-1,1:-1]
         return all_potentials
         
     @staticmethod 
     @jit(nopython=True)
-    def SOR_sub_func_anim(max_iter, x, N, sources, L, 
-                          U, w, D, b, tol, verbose):
-        Ns = int(N**0.5)
+    def SOR_sub_func_anim(max_iter,x,Ns,sources,w,tol,verbose):
         all_potentials = np.zeros((max_iter, Ns, Ns))
-        for i in range(max_iter):
-            all_potentials[i] = x.reshape(Ns,Ns)
+        for iteration in range(max_iter):
+            all_potentials[iteration] = x[1:-1,1:-1]
             initial_norm = np.linalg.norm(x)
-            for k in range(N):
-                if sources[k]:
-                    continue
-                s1 = 0
-                s2 = 0
-                for j in range(0,k):
-                    s1 += L[k,j]*x[j]
-                for j in range(k+1,N):
-                    s2 += U[k,j]*x[j]
-                x[k] = (1-w)*x[k] + (w/D[k]) * (b[k] -s1 -s2)
+            for i in range(0,Ns):
+                i_1 = i+1
+                for j in range(0,Ns):
+                    j_1 = j+1
+                    if sources[i,j]:
+                        continue
+                    '''
+                    Need:
+                        i_1
+                        i_1-1 -> i
+                        i_1+1
+                        j_1
+                        j_1-1 -> j
+                        j_1+1
+                    combinations:
+                        i_1,j_1+1
+                        i_1,j_1-1
+                        i_1+1,j_1
+                        i_1-1,j_1
+                        these are transformed as above (needs fewer operations)
+                    '''
+                    x[i_1,j_1] = (1.-w)*x[i_1,j_1] + (w/(4.)) *(x[i_1,j_1+1]+
+                                                                x[i_1,j]+
+                                                                x[i_1+1,j_1]+
+                                                                x[i,j_1])
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
-                print("i,diff:",i,diff)
+                print("iteration, diff:",iteration,diff)
             if diff < tol:
-                break  
-        return x,all_potentials[:i+1,...]
+                break              
+        return x,all_potentials[:iteration+1,...]
         
 if __name__ == '__main__':        
     Ns = 350
