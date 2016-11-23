@@ -35,19 +35,21 @@ from system import Shape,System
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
-Ns = 3
-square_coaxial_cable = Shape(Ns,1,(0.5,0.5))
+import time
+start = time.clock()
+Ns = 200
+square_coaxial_cable = Shape(Ns,1,(0.54,0.5),0.5,shape='square')
 cable = System(Ns)
 cable.add(square_coaxial_cable)
 
-cable.show_setup(interpolation='none')
+print('time: {:.3f}'.format(time.clock()-start))
+#cable.show_setup(interpolation='none')
 
 tol = 1e-3
 max_iter = 100000
 
 frames = 100
-anim = False
+anim = True
 save = False
 show = False
 if anim:

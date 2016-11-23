@@ -43,6 +43,7 @@ class Shape:
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
         self.add_source(origin,*args,**kwargs)
+
     def find_closest_gridpoint(self,coords):
         '''
         Find closest point on grid to coords
@@ -56,41 +57,48 @@ class Shape:
         # broadcasting
         abs_diff = np.abs(self.grid - coords)
         N_dim = self.grid.shape[0]
-        match = self.match_func(N_dim,abs_diff)
+        diffs = (np.array([np.min(abs_diff[0]),np.min(abs_diff[1])]).
+                reshape(2,)[slice(None),None,None])
+#        print(diffs)
+#        print(abs_diff.shape)
+        sub = abs_diff - diffs        
+        rows = abs_diff.shape[1]
+        columns = abs_diff.shape[2]        
+        match = self.match_func(N_dim,sub,rows,columns)
+        match = map(int,match)
+#        print('match returned:',match)
         return match
         
     @staticmethod
-    @jit(nopython=False)
-    def match_func(N_dim,abs_diff):
-        diff_list = []
-        for i in range(N_dim):
-            '''
-            find row number of minimum (absolute) differences in
-            grid[0] which stores the x coordinates, and find the
-            min column for grid[1], which stores the y coords
-            '''
-            diff = np.where(abs_diff[i]==np.min(abs_diff[i]))
-            diff_list.append(np.vstack(diff))
-        diffs = np.hstack(diff_list).T
-        # .T so the rows can be iterrated over in order to find the
-        # duplicated indices - which will then reveal where the overlap is
-
-#        diff_tuples = map(tuple,diffs)
-        #print('diffs:',diffs,diffs.shape)
-#        counts = Counter(diff_tuples).most_common()
-#        match = counts[0][0]
-        rows = diffs.shape[0]
-        match = [-1,-1]
+    @jit(nopython=True)
+    def match_func(N_dim,sub,rows,columns):
+        '''
+        find row number of minimum (absolute) differences in
+        grid[0] which stores the x coordinates, and find the
+        min column for grid[1], which stores the y coords
+        '''
+#        diff = np.where(abs_diff[i]==np.min(abs_diff[i]))
+        match = np.zeros(2,dtype=np.int64)
+        FOUND = False
+        subx = sub[0]
+        suby = sub[1]
         for i in range(rows):
-            for j in range(rows):
-                if i != j:
-                    #print('diff i j:',diffs[i],diffs[j])
-                    if diffs[i][0] == diffs[j][0] and diffs[i][1] == diffs[j][1]:
-                        match = diffs[i]
-                        #print('match:',match)
-            if match[0] != -1:
-                break
-        # desired coordinates (grid coordinates)
+#            print('i',i)
+            subx_row = subx[i]
+            suby_row = suby[i]
+            for j in range(columns):
+                cell1 = subx_row[j]
+                cell2 = suby_row[j]
+                if cell1<1e-15 and cell2<1e-15:
+                    match = np.array([i,j],dtype=np.int64)
+                    FOUND = True
+                if FOUND:
+#                    print('break1')
+                    break
+            if FOUND:
+#                print('break2')
+                break            
+            
         return match
     def add_source(self,origin,*args,**kwargs):
         '''
@@ -122,7 +130,7 @@ class Shape:
             #need to convert list to tuple below so that the right kind of
             #indexing is triggered
             source_coords = tuple(self.find_closest_gridpoint(origin))
-            print('source coords:',source_coords)
+#            print('source coords:',source_coords)
             self.potentials[source_coords] = self.potential
             self.sources[source_coords] = True
             self.source_potentials[source_coords] = self.potential
