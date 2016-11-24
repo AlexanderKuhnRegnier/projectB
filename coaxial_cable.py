@@ -35,52 +35,60 @@ from system import Shape,System
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import time
-start = time.clock()
-Ns = 300
-square_coaxial_cable = Shape(Ns,1,(0.5,0.5),(1/3.),shape='square')
-cable = System(Ns)
-cable.add(square_coaxial_cable)
+import os
+plt.ioff()
+def name_folder(folder):
+    '''
+    Input: folder (string)
+    Returns a new folder name string with a number appended to it, so as to
+        make it unique in its directory.
+    '''
+    for i in range(1000):
+        new = folder+str(i)
+        if not os.path.isdir(new):
+            return new
+ 
+'''
+show - to test out shapes
+'''
+show = False
 
-print('time: {:.3f}'.format(time.clock()-start))
-#cable.show_setup(interpolation='none')
-
-tol = 1e-3
-max_iter = 100000
-
-frames = 100
-anim = False
-save = False
-show = True
-if anim:
-    all_potentials = cable.SOR_anim(tol=0,max_iter=frames)
-    plt.ioff()
-    fig,ax = plt.subplots(figsize=(15,15))
-    image = plt.imshow(all_potentials[0],
-                       vmin = np.min(all_potentials), vmax=np.max(all_potentials),
-                        interpolation = 'none',
-                        aspect='equal',extent=None,
-                        origin='lower')
-    iter_text = ax.set_title('')
-    plt.colorbar()
-    
-    def update_image(*args):
-        print('args:',args,args[0])
-        iter_text.set_text(str(args[0]))
-        image.set_array(all_potentials[args[0]])
-        return image,iter_text
-    
-    ani = animation.FuncAnimation(fig,update_image,blit=False,frames=frames,
-                                  interval=200, repeat=False,repeat_delay=500)
-    
-    if save:
-        import os
-        plt.rcParams['animation.ffmpeg_path'] = os.path.join(os.getcwd(),'ffmpeg.exe')
-        FFwriter = animation.FFMpegWriter(fps=10,bitrate=3000)
-        ani.save('test.mp4',writer=FFwriter,dpi=300)
-    else:
-        plt.show()
-        
 if show:
-    cable.SOR(tol=tol,max_iter=max_iter)
-    cable.show(title='Square Coaxial Cable, SOR',interpolation='none')
+    Ns = 1000
+    square_coaxial_cable = Shape(Ns,1,(0.5,0.5),3.63e-1,shape='square',filled=False)
+    cable = System(Ns)
+    cable.add(square_coaxial_cable) 
+    cable.SOR(tol=1e-7,max_iter=100000)   
+    cable.show(interpolation='none')  
+    
+picture_folder = name_folder(os.path.join(os.getcwd(),'potential_cross_sections'))            
+#import time
+#start = time.clock()
+Ns = 50
+#print('time: {:.3f}'.format(time.clock()-start))
+#cable.show_setup(interpolation='none')
+tol = 1e-8
+max_iter = 500000
+
+solve = True
+
+steps = 10
+
+if solve:
+    os.mkdir(picture_folder)
+    for i,side_length in enumerate(np.linspace(4e-1,5.3e-1,steps)):
+        square_coaxial_cable = Shape(Ns,1,(0.5,0.5),side_length,shape='square')
+        cable = System(Ns)
+        cable.add(square_coaxial_cable)    
+        '''
+        solve the system
+        '''
+        cable.SOR(tol=tol,max_iter=max_iter)
+    #    cable.show(title='Square Coaxial Cable, SOR',interpolation='none')
+        '''
+        now, plot a cross section of the potential across the central row.
+        Ideally, the number of grid points should be an ODD number for this
+        to work ideally - due to the symmetry of the problem
+        '''
+        savepath = os.path.join(picture_folder,str(i))
+        cross_section = cable.cross_section(side_length,savepath=savepath)

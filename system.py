@@ -61,7 +61,7 @@ class Shape:
         for i in range(N_dim):
             index = np.where(abs_diff[i]==np.min(abs_diff[i]))[i][0]
             match.append(int(index))
-        print('match:',match)
+#        print('match:',match)
         return match
         
     def add_source(self,origin,*args,**kwargs):
@@ -121,51 +121,66 @@ documentation""".format(len(args),shape))
         if shape == 'rectangle' or shape == 'square':
             if 1 <= len(args) <= 2:
                 width = args[0]
+                width_grid = int(round(args[0]/self.h))
+                half_width_grid = int(round(args[0]/(2*self.h)))
                 if len(args) == 1:
                     height = width
+                    height_grid = width_grid
+                    half_height_grid = half_width_grid
                 else:
                     height = args[1]
+                    height_grid = int(round(args[1]/self.h))
+                    half_height_grid = int(round(args[1]/(2*self.h)))
                     
                 print ("Adding {:} centred at {:} with "
                        "width: {:.3f}, height: {:.3f}".format(shape,origin,
                                                         width,height))
 
-                vertices = []
-                min_x = origin[0]-width/2.
-                max_x = origin[0]+width/2.
-                min_y = origin[1]-height/2.
-                max_y = origin[1]+height/2.
-                for x,y in zip((min_x,min_x,max_x,max_x,min_x),
-                                (min_y,max_y,max_y,min_y,min_y)):
-                    vertices.append((x,y))
-
-#                print(min_x,max_x,min_y,max_y)                    
-#                print('vertices: ')
-#                print(vertices)
-                
-                for vertex1,vertex2 in zip(vertices[:-1],vertices[1:]):
-                    x1 = vertex1[0]
-                    x2 = vertex2[0]
-                    y1 = vertex1[1]
-                    y2 = vertex2[1]
-                    '''
-                    Had to add '+self.h' to the end argument, since 
-                    occasionally a grid point would be overlooked due to
-                    the ordering of the traversal
-                    '''
-                    if x1==x2:
-#                        print('min max y ',min((y1,y2)),max((y1,y2)))
-#                        print('x1 ',x1)
-                        for y in np.arange(min((y1,y2)),max((y1,y2))+self.h,self.h):
-                            self.add_source((x1,y))
-                    elif y1==y2:
-#                        print('min max x',min((x1,x2)),max((x1,x2)))
-#                        print('y1 ',y1)
-                        for x in np.arange(min((x1,x2)),max((x1,x2))+self.h,self.h):
-                            self.add_source((x,y1))
+                origin_grid = self.find_closest_gridpoint(origin)
+                min_x = origin_grid[0] - half_width_grid
+                max_x = min_x + width_grid
+                min_y = origin_grid[1] - half_height_grid
+                max_y = min_y + height_grid
+                def limiter(coord):
+                    if coord < 0:
+                        return 0
+                    elif coord >= self.Ns:
+                        return self.Ns-1
                     else:
-                        print("vertices do not lie along straight lines!")
+                        return coord
+                starts  =    map(limiter,[min_y,min_x,max_y,max_x])
+                targets =    map(limiter,[max_y,max_x,min_y,min_x])
+                keep_fixed = map(limiter,[min_x,max_y,max_x,min_y])
+                changing =   [1,    0,    1,    0    ] #0 for x, 1 for y
+                const = [1,0]
+#                print(origin_grid)
+#                print(starts)
+#                print(targets)
+#                print(keep_fixed)
+#                print(self.sources)
+                for start,target,fixed,change in zip(starts,targets,
+                                                     keep_fixed,changing):
+#                    print('')
+#                    print(start,target,fixed,change)
+                    '''
+                    Need +1 on end, since the direction of traversal 
+                    changes ie. always increases (although this could be 
+                    changed), and therefore a grid point may be missed out,
+                    since the clockwise 'path' is not traced out directly.
+                    '''
+                    for variable in range(min(start,target),
+                                          max(start,target)+1):
+                        r = [0,0]
+                        r[change] = variable
+                        r[const[change]] = fixed
+#                        print('r',r)
+                        r = tuple(r) #need tuple for proper type of indexing!
+                        self.potentials[r] = self.potential
+                        self.sources[r] = True
+                        self.source_potentials[r] = self.potential
+#                print(self.sources)
                 if filled:
+#                    print('filling')
                     self.fill()
             else:
                 print(not_implemented_message)
@@ -226,13 +241,43 @@ class System:
         self.potentials += shape_instance.potentials
         self.sources += shape_instance.sources
         self.source_potentials += shape_instance.source_potentials
+
+    def cross_section(self,side_length,show=True,savepath=''):
+        '''
+        now, plot a cross section of the potential across the central row.
+        Ideally, the number of grid points should be an ODD number for this
+        to work ideally - due to the symmetry of the problem
+        '''
+        mid_row_index = int((self.Ns-1)/2.)
+        cross_section = self.potentials[mid_row_index]
+        plt.figure()
+        plt.title('1-D Cross-Section of the Potential across the System\n'
+                  +'tol = {:.2e}, Ns = {:.2e}, side length = {:.3e}'.
+                  format(self.tol,self.Ns,side_length))
+        grid_positions = self.grid[0][:,0]
+        plt.plot(grid_positions,cross_section,label='potential')
+        plt.xlabel('Distance from left wall (natural units)')
+        plt.ylabel('Potential (V)')
+    #    plt.legend()
+        ymin,ymax = plt.ylim()
+        plt.ylim(ymax=ymax*1.1)
+        plt.tight_layout()
+        if savepath:
+            plt.savefig(savepath,bbox_inches='tight',dpi=200) 
+            plt.close('all') 
+        else:
+            if show:
+                plt.show()
+            else:
+                plt.close('all')
+        return cross_section
     def show_setup(self,title='',**fargs):
         '''
         Show the sources in the system
         '''
         plt.figure()
         plt.title('Sources')
-        plt.imshow(self.source_potentials,origin='lower',**fargs)
+        plt.imshow(self.source_potentials.T,origin='lower',**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -244,7 +289,7 @@ class System:
         '''
         plt.figure()
         plt.title('Potential')
-        plt.imshow(self.potentials,origin='lower',**fargs)
+        plt.imshow(self.potentials.T,origin='lower',**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -364,6 +409,8 @@ class System:
 
         D is of length N^2, every element is -4, N is the number of gridpoints
         '''
+        self.tol = tol
+        self.w = w
         Ns = self.Ns
         w = float(w)
         sources = self.sources
@@ -496,20 +543,24 @@ class System:
         return x,all_potentials[:iteration+1,...]
         
 if __name__ == '__main__':        
-    Ns = 350
+    Ns = 1000
     test = System(Ns)
-    # test.add(Shape(30,1,(0.01,0.01)))
-    #test.add(Shape(Ns,1.2,(0.9,0.9),0,4))
+    '''
+    #used for 'grid size case study' folder images
+    test.add(Shape(Ns,-4,(0.9,0.9),0.1,shape='square'))
     test.add(Shape(Ns,-1.3,(0.5,0.5),0.18,shape='circle',filled=False))
     test.add(Shape(Ns,1.8,(0.5,0.5),0.1,shape='circle',filled=False))
-    test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='circle',filled=False))
-    # print test.potentials
-    
-    #plt.close('all')
+    test.add(Shape(Ns,2,(0.5,0.5),0.3,shape='circle',filled=False))
+    test.add(Shape(Ns,-1,(0.354,0.506),0.03,shape='circle',filled=False))
+    test.add(Shape(Ns,1,(0.37,0.49),0.03,shape='circle',filled=False))
+    '''
+    test.add(Shape(Ns,1,(0.45,0.5),0.01,0.5))
+    test.add(Shape(Ns,1,(0.55,0.5),0.01,0.5))
+    test.add(Shape(Ns,0,(0.5,0.5)))
     
     calc = 1
-    tol = 1e-14
-    max_iter = 100
+    tol = 1e-9
+    max_iter = 100000
     show = True
     #methods = [test.SOR,test.jacobi,test.gauss_seidel]
     methods = [test.SOR]
@@ -519,4 +570,4 @@ if __name__ == '__main__':
             print(name)
             f(tol=tol,max_iter=max_iter)
             if show:
-                test.show(title=name)
+                test.show(title=name,interpolation='none')
