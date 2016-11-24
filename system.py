@@ -42,6 +42,7 @@ class Shape:
         self.potentials = np.zeros(self.grid.shape[1:])
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
+        self.shape_creation_args = []        
         self.add_source(origin,*args,**kwargs)
 
     def find_closest_gridpoint(self,coords):
@@ -90,7 +91,10 @@ class Shape:
             'circle':   origin is the centre of the circle
                         coord1 is the radius
         '''
+        self.shape_creation_args.append([self.Ns,self.potential,
+                                         origin,args,kwargs])
         if not args: #if only origin is specified
+            print("Adding grid-point source at {:}".format(origin))
             #need to convert list to tuple below so that the right kind of
             #indexing is triggered
             source_coords = tuple(self.find_closest_gridpoint(origin))
@@ -230,6 +234,9 @@ class System:
         self.potentials = np.zeros(self.grid.shape[1:])
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
+        self.shape_creation_args = []    
+        self.shapes = []
+        
     def add(self,shape_instance):
         '''
         Add sources to the system using instances of the 'Shape' class.
@@ -241,7 +248,127 @@ class System:
         self.potentials += shape_instance.potentials
         self.sources += shape_instance.sources
         self.source_potentials += shape_instance.source_potentials
+        self.shapes.append(shape_instance) 
+        self.shape_creation_args.extend(shape_instance.shape_creation_args)
+           
+    def sampling(self,Ns_new):
+        '''
+        Interpolate the known potentials ('potentials_old') based on the 
+        current grid sizing ('Ns_old') and use this to determine the 
+        potentials on a new grid sizing given by 'Ns_new'
+        '''
+        U,V = np.gradient(self.potentials)
+        '''
+        U gives gradient at each grid point going "down" the columns,
+        V gives the gradient at each grid point going "right" along the rows
+        '''
+        new_potentials = self.sampling_sub_func(self.Ns,Ns_new,self.potentials,
+                                                U,V)
+        return new_potentials
+        
+    @staticmethod
+    @jit(nopython=True)
+    def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V):
+        '''
+        First go down the columns, and create an array of new potentials based
+        on this.
+        Select the column with index j
+        Divide 'new_h_values' by the old grid spacing 'h_old',
+        and take the integer value of the result in order to determine
+        which gridpoint came before - this previous gridpoint's potential 
+        and gradient will be used to estimate the desired potential.
+        
+        The new points will lie in between two old rows & columns in general,
+        so the proportion of those should be taken into account in the
+        calculation below, however, it should be good enough to simply
+        follow the route of taking the integer part of the ratio between
+        the new and the old step-sizes, since this approximation will get
+        better the more gridpoints there are. Also, assuming that the variation
+        between two adjacents columns / rows will be small will become more
+        valid as the physical spacing between grid points decreases, as well.
+        '''        
+        h_old = 1./Ns_old
+        h_new = 1./Ns_new
+        new_h_values = np.arange(Ns_new)*h_new
+        point_on_old = (new_h_values/h_old)
+        point_on_old_int = np.zeros(point_on_old.shape[0],dtype=np.int64)
+        for i in range(point_on_old.shape[0]):
+            point_on_old_int[i] = int(point_on_old[i])
+        distances = point_on_old - point_on_old_int
+        new_potentials_rowwise = np.zeros((Ns_new,Ns_new))
+        for j_new in range(Ns_new):
+            j_old = point_on_old_int[j_new]
+            column_potentials_old = potentials_old[:,j_old]
+            gradients = U[:,j_old]
+            for i_new in range(Ns_new):
+                i_old = point_on_old_int[i_new]
+                new_potentials_rowwise[i_new,j_new] = (
+                                                column_potentials_old[i_old]+
+                                                gradients[i_old]*
+                                                distances[i_new])
+        '''
+        Now repeat the above, just for the columns, and then average the
+        results in order to get the final estimate.
+        '''
+        new_potentials_columnwise = np.zeros((Ns_new,Ns_new))        
+        for i_new in range(Ns_new):
+            i_old = point_on_old_int[i_new]
+            row_potentials_old = potentials_old[i_old,:]
+            gradients = V[:,i_old]
+            for j_new in range(Ns_new):
+                j_old = point_on_old_int[j_new]
+                new_potentials_columnwise[i_new,j_new] = (
+                                                 row_potentials_old[j_old]+
+                                                 gradients[j_old]*
+                                                 distances[j_new])
+        new_potentials = (new_potentials_rowwise+new_potentials_columnwise)/2.
+        return new_potentials            
+        
+    def precondition(self,Ns,max_iter,tol):
+        '''
+        Solve the desired system using a lower-resolution mesh, and then
+        start solving the system for the mesh resolution requested afterwards,
+        using an interpolation of the previously determined potentials 
+        on the lower resolution grid as a starting point. If needed, this
+        procedure can be repeated several times by repeatedly calling this
+        function.
+        '''
+        preconditioning_system = System(Ns)
+        '''
+        Now need to add the desired shapes to the preconditioning_system,
+        using the 'source_creation_args' that records the arguments that
+        previously went into creating all the sources. The only difference
+        will be the Ns argument, since there will be a different grid.
+        Shapes will therefore be created using the original potentials,
+        new Ns values and the old shape creation arguments.
+        '''
+        for creation_args in self.shape_creation_args:
+            new_args = creation_args
+            new_args[0] = Ns #replace old grid resolution with new resolution!
+            preconditioning_system.add(Shape(new_args[0],new_args[1],new_args[2],*new_args[3],**new_args[4]))
 
+        '''
+        Need to translate the current potentials to the grid, use the 
+        sampling function to this using the gradients between the
+        grid points.
+        Uses current potential, since this may have been updated by
+        previous preconditioning (and would therefore not simply be
+        all 0s anymore).
+        '''                                            
+        preconditioning_system.potentials = self.sampling(Ns)
+        '''
+        Set the source terms back to their proper values based on the assigned
+        shapes, since the averaging in the sampling function will 
+        corrupt this
+        '''
+        preconditioning_system.potentials[preconditioning_system.sources] = (
+                                     preconditioning_system.source_potentials[
+                                     preconditioning_system.sources])
+        preconditioning_system.show(title='new')
+#        preconditioning_system.show_setup(title='new setup')
+        self.show(title='old')
+#        self.show_setup(title='old setup')
+    
     def cross_section(self,side_length,show=True,savepath=''):
         '''
         now, plot a cross section of the potential across the central row.
@@ -271,32 +398,55 @@ class System:
             else:
                 plt.close('all')
         return cross_section
-    def show_setup(self,title='',**fargs):
+    def show_setup(self,title='',interpolation='none',**fargs):
         '''
         Show the sources in the system
         '''
         plt.figure()
         plt.title('Sources')
-        plt.imshow(self.source_potentials.T,origin='lower',**fargs)
+        plt.imshow(self.source_potentials.T,origin='lower',
+                   interpolation='none',**fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
             plt.title(title)        
         plt.show()
-    def show(self,every=1,title='',**fargs):
+    def streamplot(self,title='',**frags):
+        plt.figure()
+        U,V = np.gradient(self.potentials)
+        fields = np.sqrt(U**2+V**2)
+        U = -U.T
+        V = -V.T        
+        X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
+        lw = 8*fields/np.max(fields)
+        plt.streamplot(X, Y, U, V,
+                       density = [1,1],
+                       color = self.potentials.T,
+                       linewidth = lw)
+        if title:
+            plt.title(title)
+        plt.tight_layout()            
+        plt.show()
+    def show(self,every=1,title='',interpolation='none',**fargs):
         '''
         Show the calculated potential
         '''
         plt.figure()
         plt.title('Potential')
-        plt.imshow(self.potentials.T,origin='lower',**fargs)
+        plt.imshow(self.potentials.T,origin='lower',interpolation='none',
+                   **fargs)
         U,V = np.gradient(self.potentials)
         plt.colorbar()
 #        U = U[::every,::every]
 #        V = V[::every,::every]
         X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
-        U = U.T
-        V = V.T
+        '''
+        Have to take transpose of potential gradients, but not of the 
+        positions, due to the different ways that mgrid and meshgrid
+        arange their outputs.
+        '''
+        U = -U.T
+        V = -V.T
         plt.quiver(X[::every,::every],Y[::every,::every],
                    U[::every,::every],V[::every,::every])
         plt.tight_layout()
@@ -551,8 +701,8 @@ class System:
                 break              
         return x,all_potentials[:iteration+1,...]
         
-if __name__ == '__main__':        
-    Ns = 20
+if __name__ == '__main__': 
+    Ns = 81
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -565,12 +715,11 @@ if __name__ == '__main__':
     '''
 #    test.add(Shape(Ns,1,(0.3,0.5),0.01,0.5))
 #    test.add(Shape(Ns,-1,(0.7,0.5),0.01,0.5))
-    test.add(Shape(Ns,-5,(0.5,0.5)))
-    
-    calc = 1
+    test.add(Shape(Ns,1,(0.5,0.5)))
+    calc = True
     tol = 1e-6
-    max_iter = 5000
-    show = True
+    max_iter = 100
+    show = False
     #methods = [test.SOR,test.jacobi,test.gauss_seidel]
     methods = [test.SOR]
     names = [f.__name__ for f in methods]
@@ -579,4 +728,8 @@ if __name__ == '__main__':
             print(name)
             f(tol=tol,max_iter=max_iter)
             if show:
-                test.show(title=name,interpolation='none',every=1)
+                test.show(title=name,interpolation='none',every=7)
+                test.streamplot()
+    print('original')
+    print(test.potentials)
+    test.precondition(41,10,1e-5)
