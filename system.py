@@ -283,14 +283,22 @@ class System:
         if title:
             plt.title(title)        
         plt.show()
-    def show(self,title='',**fargs):
+    def show(self,every=1,title='',**fargs):
         '''
         Show the calculated potential
         '''
         plt.figure()
         plt.title('Potential')
         plt.imshow(self.potentials.T,origin='lower',**fargs)
+        U,V = np.gradient(self.potentials)
         plt.colorbar()
+#        U = U[::every,::every]
+#        V = V[::every,::every]
+        X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
+        U = U.T
+        V = V.T
+        plt.quiver(X[::every,::every],Y[::every,::every],
+                   U[::every,::every],V[::every,::every])
         plt.tight_layout()
         if title:
             plt.title(title)
@@ -420,12 +428,8 @@ class System:
         execution.
         Then 'fill in' the potential at the center of this matrix
         '''
-        x = np.zeros((Ns+2,Ns+2))
-        #randomise starting potential
-        x_seed = np.random.random(self.potentials.shape)
-        x_seed[sources] = self.source_potentials[sources]    
-        #randomise starting potential        
-        x[1:-1,1:-1] = x_seed     
+        x = np.zeros((Ns+2,Ns+2))      
+        x[1:-1,1:-1] = self.source_potentials 
         '''
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid, which is initialised
@@ -435,8 +439,10 @@ class System:
         self.potentials = x[1:-1,1:-1]
         
     @staticmethod
-    @jit(nopython=True)
+    @jit(nopython=True,cache=True)
     def SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose):
+        w_1 = (1.-w)
+        w_4 = (w/(4.))
         for iteration in range(max_iter):
             initial_norm = np.linalg.norm(x)
             for i in range(0,Ns):
@@ -460,14 +466,17 @@ class System:
                         i_1-1,j_1
                         these are transformed as above (needs fewer operations)
                     '''
-                    x[i_1,j_1] = (1.-w)*x[i_1,j_1] + (w/(4.)) *(x[i_1,j_1+1]+
-                                                                x[i_1,j]+
-                                                                x[i_1+1,j_1]+
-                                                                x[i,j_1])
+                    x[i_1,j_1] = w_1*x[i_1,j_1] + w_4 *(x[i_1,j_1+1]+
+                                                        x[i_1,j]+
+                                                        x[i_1+1,j_1]+
+                                                        x[i,j_1])
+
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
+            
             if verbose:
                 print("iteration, diff:",iteration,diff)
+            
             if diff < tol:
                 break  
         return x
@@ -543,7 +552,7 @@ class System:
         return x,all_potentials[:iteration+1,...]
         
 if __name__ == '__main__':        
-    Ns = 1000
+    Ns = 20
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -554,13 +563,13 @@ if __name__ == '__main__':
     test.add(Shape(Ns,-1,(0.354,0.506),0.03,shape='circle',filled=False))
     test.add(Shape(Ns,1,(0.37,0.49),0.03,shape='circle',filled=False))
     '''
-    test.add(Shape(Ns,1,(0.45,0.5),0.01,0.5))
-    test.add(Shape(Ns,1,(0.55,0.5),0.01,0.5))
-    test.add(Shape(Ns,0,(0.5,0.5)))
+#    test.add(Shape(Ns,1,(0.3,0.5),0.01,0.5))
+#    test.add(Shape(Ns,-1,(0.7,0.5),0.01,0.5))
+    test.add(Shape(Ns,-5,(0.5,0.5)))
     
     calc = 1
-    tol = 1e-9
-    max_iter = 100000
+    tol = 1e-6
+    max_iter = 5000
     show = True
     #methods = [test.SOR,test.jacobi,test.gauss_seidel]
     methods = [test.SOR]
@@ -570,4 +579,4 @@ if __name__ == '__main__':
             print(name)
             f(tol=tol,max_iter=max_iter)
             if show:
-                test.show(title=name,interpolation='none')
+                test.show(title=name,interpolation='none',every=1)

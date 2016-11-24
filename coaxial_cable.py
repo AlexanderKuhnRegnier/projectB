@@ -34,7 +34,7 @@ from __future__ import print_function
 from system import Shape,System
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from time import clock
 import os
 plt.ioff()
 def name_folder(folder):
@@ -51,16 +51,18 @@ def name_folder(folder):
 '''
 show - to test out shapes
 '''
-show = False
+show = True
 
 if show:
-    Ns = 1000
-    square_coaxial_cable = Shape(Ns,1,(0.5,0.5),3.63e-1,shape='square',filled=False)
+    Ns = 100
+    square_coaxial_cable = Shape(Ns,1,(0.5,0.5),(1./3),shape='square',filled=True)
     cable = System(Ns)
-    cable.add(square_coaxial_cable) 
-    cable.SOR(tol=1e-7,max_iter=100000)   
+    cable.add(square_coaxial_cable)
+    start = clock()
+    cable.SOR(tol=1e-12,max_iter=1000)   
+    print('time:',clock()-start)
     cable.show(interpolation='none')  
-    
+
 picture_folder = name_folder(os.path.join(os.getcwd(),'potential_cross_sections'))            
 #import time
 #start = time.clock()
@@ -70,7 +72,7 @@ Ns = 50
 tol = 1e-8
 max_iter = 500000
 
-solve = True
+solve = False
 
 steps = 10
 
