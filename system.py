@@ -94,7 +94,7 @@ class Shape:
         self.shape_creation_args.append([self.Ns,self.potential,
                                          origin,args,kwargs])
         if not args: #if only origin is specified
-            print("Adding grid-point source at {:}".format(origin))
+#            print("Adding grid-point source at {:}".format(origin))
             #need to convert list to tuple below so that the right kind of
             #indexing is triggered
             source_coords = tuple(self.find_closest_gridpoint(origin))
@@ -364,7 +364,13 @@ class System:
         preconditioning_system.potentials[preconditioning_system.sources] = (
                                      preconditioning_system.source_potentials[
                                      preconditioning_system.sources])
+        
+        preconditioning_system.show(title='preconditioning system',quiver=False)
+        
         preconditioning_system.SOR(w=w,tol=tol,max_iter=max_iter,verbose=verbose)
+        
+        preconditioning_system.show(title='preconditioning system',quiver=False)
+        
         new_potenials = preconditioning_system.sampling(self.Ns)
         '''
         Reset the source terms once again after assigning them back to self
@@ -372,9 +378,8 @@ class System:
         self.potentials = new_potenials
         self.potentials[self.sources] = self.source_potentials[self.sources]
         
-#        self.show(every=10,quiver=False)
-#        preconditioning_system.show(every=5,title='preconditioning system',
-#                                    quiver=False)
+        self.show(every=10,quiver=False)
+        preconditioning_system.show(title='preconditioning system',quiver=False)
     
     def cross_section(self,side_length,show=True,savepath=''):
         '''
