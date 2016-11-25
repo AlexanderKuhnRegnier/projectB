@@ -48,7 +48,7 @@ class Shape:
     def find_closest_gridpoint(self,coords):
         '''
         Find closest point on grid to coords
-        '''
+        ''' 
         coords = np.array(coords).reshape(-1,)
 #        print('coords:',coords)
         # make sure coords have correct shape for next step
@@ -63,12 +63,21 @@ class Shape:
             index = np.where(abs_diff[i]==np.min(abs_diff[i]))[i][0]
             match.append(int(index))
 #        print('match:',match)
-        return match
+        source_coords = tuple(match)
+        return source_coords        
+    def add_closest_gridpoint(self,coords):
+        '''
+        Add closest point on grid to coords
+        '''
+        source_coords = self.find_closest_gridpoint(coords)
+        self.potentials[source_coords] = self.potential
+        self.sources[source_coords] = True
+        self.source_potentials[source_coords] = self.potential        
         
     def add_source(self,origin,*args,**kwargs):
         '''
         *args: coord1[,coord2]
-        **kwargs: 'shape':'circle' or 'rectangle'
+        **kwargs: 'shape':'circle', 'rectangle' or 'point'
 
         In 2D, a regular shape can be specified by 3 parameters, the centre
         (origin) of the shape, and two additional coordinates (could be more
@@ -93,24 +102,14 @@ class Shape:
         '''
         self.shape_creation_args.append([self.Ns,self.potential,
                                          origin,args,kwargs])
-        if not args: #if only origin is specified
-#            print("Adding grid-point source at {:}".format(origin))
-            #need to convert list to tuple below so that the right kind of
-            #indexing is triggered
-            source_coords = tuple(self.find_closest_gridpoint(origin))
-#            print('source coords:',source_coords)
-            self.potentials[source_coords] = self.potential
-            self.sources[source_coords] = True
-            self.source_potentials[source_coords] = self.potential
-            # terminate function here, since the necessary action has been
-            # performed.
-            return None
+
         # shape selection
         if 'shape' in kwargs:
             # shape specified explicitly
-            shape = kwargs['shape']
+            shape = kwargs['shape'].lower()
         else:
             shape = 'rectangle'
+            
         # select whether the shape should be filled or not
         if 'filled' in kwargs:
             filled = kwargs['filled']
@@ -122,7 +121,13 @@ class Shape:
 No shape has been added, please refer to function
 documentation""".format(len(args),shape))
 
-        if shape == 'rectangle' or shape == 'square':
+        if shape == 'point': #if only origin is specified, 'point' source
+            print("Adding grid-point source at {:}".format(origin))
+            #need to convert list to tuple below so that the right kind of
+            #indexing is triggered
+            self.add_closest_gridpoint(origin)
+        
+        elif shape == 'rectangle' or shape == 'square':
             if 1 <= len(args) <= 2:
                 width = args[0]
                 width_grid = int(round(args[0]/self.h))
@@ -188,7 +193,7 @@ documentation""".format(len(args),shape))
                     self.fill()
             else:
                 print(not_implemented_message)
-        if shape == 'circle':
+        elif shape == 'circle':
             if len(args) == 1:
                 print("Adding circle centred at {:} with radius {:}".format(
                 origin,args[0]))
@@ -198,12 +203,14 @@ documentation""".format(len(args),shape))
                 r = args[0]
                 d_theta = self.h/(2*r)
                 for theta in np.arange(0,2*np.pi,d_theta):
-                    self.add_source((origin[0]+r*np.sin(theta),
-                                     origin[1]+r*np.cos(theta)))
+                    self.add_closest_gridpoint((origin[0]+r*np.sin(theta),
+                                                origin[1]+r*np.cos(theta)))
                 if filled:
                     self.fill()
             else:
                 print(not_implemented_message)
+        else:
+            print(not_implemented_message)
     def fill(self):
         '''
         fill shape row-wise, assigning the same potential throughout
@@ -343,7 +350,7 @@ class System:
         new Ns values and the old shape creation arguments.
         '''
         for creation_args in self.shape_creation_args:
-            new_args = creation_args
+            new_args = creation_args[:] #copy so original is not changed!
             new_args[0] = Ns #replace old grid resolution with new resolution!
             preconditioning_system.add(Shape(new_args[0],new_args[1],new_args[2],*new_args[3],**new_args[4]))
 
@@ -361,15 +368,16 @@ class System:
         shapes, since the averaging in the sampling function will 
         corrupt this
         '''
+#        preconditioning_system.show(title='precon1')
         preconditioning_system.potentials[preconditioning_system.sources] = (
                                      preconditioning_system.source_potentials[
                                      preconditioning_system.sources])
         
-        preconditioning_system.show(title='preconditioning system',quiver=False)
+#        preconditioning_system.show(title='precon2')
         
         preconditioning_system.SOR(w=w,tol=tol,max_iter=max_iter,verbose=verbose)
         
-        preconditioning_system.show(title='preconditioning system',quiver=False)
+#        preconditioning_system.show(title='precon3')
         
         new_potenials = preconditioning_system.sampling(self.Ns)
         '''
@@ -378,8 +386,8 @@ class System:
         self.potentials = new_potenials
         self.potentials[self.sources] = self.source_potentials[self.sources]
         
-        self.show(every=10,quiver=False)
-        preconditioning_system.show(title='preconditioning system',quiver=False)
+#        self.show(every=10,quiver=False)
+#        preconditioning_system.show(title='preconditioning system',quiver=False)
     
     def cross_section(self,side_length,show=True,savepath=''):
         '''
@@ -439,7 +447,7 @@ class System:
             plt.title(title)
         plt.tight_layout()            
         plt.show()
-    def show(self,every=1,title='',interpolation='none',quiver=True,**fargs):
+    def show(self,every=1,title='',interpolation='none',quiver=False,**fargs):
         '''
         Show the calculated potential
         '''
