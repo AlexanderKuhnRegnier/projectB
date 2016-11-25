@@ -267,7 +267,7 @@ class System:
         return new_potentials
         
     @staticmethod
-    @jit(nopython=True)
+    @jit(nopython=True,cache=True)
     def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V):
         '''
         First go down the columns, and create an array of new potentials based
@@ -324,7 +324,7 @@ class System:
         new_potentials = (new_potentials_rowwise+new_potentials_columnwise)/2.
         return new_potentials            
         
-    def precondition(self,Ns,max_iter,tol):
+    def precondition(self,Ns,w=1.2,max_iter=20000,tol=1e-3,verbose=True):
         '''
         Solve the desired system using a lower-resolution mesh, and then
         start solving the system for the mesh resolution requested afterwards,
@@ -364,10 +364,17 @@ class System:
         preconditioning_system.potentials[preconditioning_system.sources] = (
                                      preconditioning_system.source_potentials[
                                      preconditioning_system.sources])
-        preconditioning_system.show(title='new')
-#        preconditioning_system.show_setup(title='new setup')
-        self.show(title='old')
-#        self.show_setup(title='old setup')
+        preconditioning_system.SOR(w=w,tol=tol,max_iter=max_iter,verbose=verbose)
+        new_potenials = preconditioning_system.sampling(self.Ns)
+        '''
+        Reset the source terms once again after assigning them back to self
+        '''
+        self.potentials = new_potenials
+        self.potentials[self.sources] = self.source_potentials[self.sources]
+        
+#        self.show(every=10,quiver=False)
+#        preconditioning_system.show(every=5,title='preconditioning system',
+#                                    quiver=False)
     
     def cross_section(self,side_length,show=True,savepath=''):
         '''
@@ -427,7 +434,7 @@ class System:
             plt.title(title)
         plt.tight_layout()            
         plt.show()
-    def show(self,every=1,title='',interpolation='none',**fargs):
+    def show(self,every=1,title='',interpolation='none',quiver=True,**fargs):
         '''
         Show the calculated potential
         '''
@@ -435,20 +442,21 @@ class System:
         plt.title('Potential')
         plt.imshow(self.potentials.T,origin='lower',interpolation='none',
                    **fargs)
-        U,V = np.gradient(self.potentials)
         plt.colorbar()
-#        U = U[::every,::every]
-#        V = V[::every,::every]
-        X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
-        '''
-        Have to take transpose of potential gradients, but not of the 
-        positions, due to the different ways that mgrid and meshgrid
-        arange their outputs.
-        '''
-        U = -U.T
-        V = -V.T
-        plt.quiver(X[::every,::every],Y[::every,::every],
-                   U[::every,::every],V[::every,::every])
+        if quiver:
+            U,V = np.gradient(self.potentials)
+    #        U = U[::every,::every]
+    #        V = V[::every,::every]
+            X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
+            '''
+            Have to take transpose of potential gradients, but not of the 
+            positions, due to the different ways that mgrid and meshgrid
+            arange their outputs.
+            '''
+            U = -U.T
+            V = -V.T
+            plt.quiver(X[::every,::every],Y[::every,::every],
+                       U[::every,::every],V[::every,::every])
         plt.tight_layout()
         if title:
             plt.title(title)
@@ -577,9 +585,14 @@ class System:
         the boundary conditions, which are never altered during the program's
         execution.
         Then 'fill in' the potential at the center of this matrix
+        
+        Initialising the potentials with 0s is not really necessary, since 
+        this is done at instance creation anyway, plus this overwrites 
+        later changes to the potential with preconditioning, for example
         '''
-        x = np.zeros((Ns+2,Ns+2))      
-        x[1:-1,1:-1] = self.source_potentials 
+        x = np.zeros((Ns+2,Ns+2))
+        #x[1:-1,1:-1] = self.source_potentials
+        x[1:-1,1:-1] = self.potentials
         '''
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid, which is initialised
@@ -662,7 +675,7 @@ class System:
         return all_potentials
         
     @staticmethod 
-    @jit(nopython=True)
+    @jit(nopython=True,cache=True)
     def SOR_sub_func_anim(max_iter,x,Ns,sources,w,tol,verbose):
         all_potentials = np.zeros((max_iter, Ns, Ns))
         for iteration in range(max_iter):
@@ -730,6 +743,3 @@ if __name__ == '__main__':
             if show:
                 test.show(title=name,interpolation='none',every=7)
                 test.streamplot()
-    print('original')
-    print(test.potentials)
-    test.precondition(41,10,1e-5)
