@@ -504,7 +504,7 @@ class System:
 #        self.show(every=10,quiver=False)
 #        preconditioning_system.show(title='preconditioning system',quiver=False)
     
-    def cross_section(self,side_length,show=True,savepath=''):
+    def cross_section(self,side_length=0,show=True,savepath=''):
         '''
         now, plot a cross section of the potential across the central row.
         Ideally, the number of grid points should be an ODD number for this
@@ -514,8 +514,8 @@ class System:
         cross_section = self.potentials[mid_row_index]
         plt.figure()
         plt.title('1-D Cross-Section of the Potential across the System\n'
-                  +'tol = {:.2e}, Ns = {:.2e}, side length = {:.3e}'.
-                  format(self.tol,self.Ns,side_length))
+                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
+                  format(self.tol,self.Nsx,self.Nsy,side_length))
         grid_positions = self.grid[0][:,0]
         plt.plot(grid_positions,cross_section,label='potential')
         plt.xlabel('Distance from left wall (natural units)')
