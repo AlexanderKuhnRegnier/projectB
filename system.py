@@ -74,6 +74,9 @@ class Shape:
         self.sources[source_coords] = True
         self.source_potentials[source_coords] = self.potential        
         
+#        print('original coords:',coords)
+        print('grid coords    :',source_coords)
+        
     def add_source(self,origin,*args,**kwargs):
         '''
         *args: coord1[,coord2]
@@ -131,26 +134,26 @@ documentation""".format(len(args),shape))
             if 1 <= len(args) <= 2:
                 width = args[0]
                 width_grid = int(round(args[0]/self.h))
-                half_width_grid = int(round(args[0]/(2*self.h)))
                 if len(args) == 1:
                     height = width
                     height_grid = width_grid
-                    half_height_grid = half_width_grid
                 else:
                     height = args[1]
                     height_grid = int(round(args[1]/self.h))
-                    half_height_grid = int(round(args[1]/(2*self.h)))
                     
                 print ("Adding {:} centred at {:} with "
                        "width: {:.3f}, height: {:.3f}".format(shape,origin,
                                                         width,height))
 
-                origin_grid = self.find_closest_gridpoint(origin)
-                min_x = origin_grid[0] - half_width_grid
+                min_x = int(round((origin[0]-width/2.)/self.h))
+                min_y = int(round((origin[1]-height/2.)/self.h))
                 max_x = min_x + width_grid
-                min_y = origin_grid[1] - half_height_grid
                 max_y = min_y + height_grid
                 def limiter(coord):
+                    '''
+                    Used so that shapes are 'clipped' at the edges of the
+                    grid
+                    '''
                     if coord < 0:
                         return 0
                     elif coord >= self.Ns:
