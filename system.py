@@ -332,14 +332,16 @@ class System:
         U gives gradient at each grid point going "down" the columns,
         V gives the gradient at each grid point going "right" along the rows
         '''
-        new_potentials = self.sampling_sub_func(np.array([self.Nsx,self.Nsy]),
-                                                np.array(Ns_new),
+        new_potentials = self.sampling_sub_func(np.array([self.Nsx,self.Nsy],
+                                                         dtype=np.int64),
+                                                np.array(Ns_new,
+                                                         dtype=np.int64),
                                                 self.potentials,U,V,
                                                 aspect_ratio_ratio)
         return new_potentials
         
     @staticmethod
-#    @jit(nopython=True,cache=True)
+    @jit(nopython=True,cache=True)
     def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V,
                           aspect_ratio_ratio):
         '''
@@ -379,20 +381,20 @@ class System:
             point_on_old_int_y[i] = int(point_on_old_y[i])
         distances_y = point_on_old_y - point_on_old_int_y     
     
-        print('ns new',Ns_new)
-        print('ns old',Ns_old)
-        print('new h values x',new_h_values_x)
-        print('point on old x',point_on_old_x)
-        print('point on old x int',point_on_old_int_x)
+#        print('ns new',Ns_new)
+#        print('ns old',Ns_old)
+#        print('new h values x',new_h_values_x)
+#        print('point on old x',point_on_old_x)
+#        print('point on old x int',point_on_old_int_x)
 #        print('distances x',distances_x)        
         
-        print('new h values y',new_h_values_y)
-        print('point on old y',point_on_old_y)
-        print('point on old y int',point_on_old_int_y) 
+#        print('new h values y',new_h_values_y)
+#        print('point on old y',point_on_old_y)
+#        print('point on old y int',point_on_old_int_y) 
 #        print('distances y:',distances_y)
         
-        print('U shape',U.shape)
-        print('V shape',V.shape)
+#        print('U shape',U.shape)
+#        print('V shape',V.shape)
         
         
         new_potentials_rowwise = np.zeros((Ns_new[0],Ns_new[1]))
