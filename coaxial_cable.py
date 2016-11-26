@@ -54,12 +54,14 @@ show - to test out shapes
 show = True
 
 if show:
-    Ns = 100
-    square_coaxial_cable = Shape(Ns,1,(0.5,0.5),(1./3),shape='square',filled=True)
+    Ns = (100,500)
+    side_length = (1/3.)
+    square_coaxial_cable = Shape(Ns,5,(0.5,0.5),3e-1,side_length,shape='square',
+                                 filled=True)
     cable = System(Ns)
     cable.add(square_coaxial_cable)
     start = clock()
-    cable.SOR(tol=1e-12,max_iter=1000)   
+    cable.SOR(tol=1e-12,max_iter=50000)   
     print('time:',clock()-start)
     cable.show(interpolation='none')  
 

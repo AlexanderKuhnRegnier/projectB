@@ -56,11 +56,11 @@ Note: to save the animation, 'ffmpeg.exe' must
 be located in the script's directory.
 '''
 anim = True
-save = True
-frames = 400    
+save = False
+frames = 500    
     
 if anim:
-    Ns = 300
+    Ns = (100,500)
     side_length = (1/3.)
     square_coaxial_cable = Shape(Ns,1.5,(0.5,0.5),3e-1,side_length,shape='square',
                                  filled=False)
@@ -70,7 +70,7 @@ if anim:
     all_potentials = cable.SOR_anim(tol=0,max_iter=frames)
     plt.ioff()
     fig,ax = plt.subplots(figsize=(15,15))
-    image = plt.imshow(all_potentials[0],
+    image = plt.imshow(all_potentials[0].T,
                        vmin = np.min(all_potentials), vmax=np.max(all_potentials),
                         interpolation = 'none',
                         aspect='equal',extent=None,
@@ -81,7 +81,7 @@ if anim:
     def update_image(*args):
         print('args:',args,args[0])
         iter_text.set_text(str(args[0]))
-        image.set_array(all_potentials[args[0]])
+        image.set_array(all_potentials[args[0]].T)
         return image,iter_text
     
     ani = animation.FuncAnimation(fig,update_image,blit=False,frames=frames,
@@ -91,6 +91,7 @@ if anim:
         plt.rcParams['animation.ffmpeg_path'] = os.path.join(os.getcwd(),'ffmpeg.exe')
         FFwriter = animation.FFMpegWriter(fps=10,bitrate=3000)
         ani.save('test.mp4',writer=FFwriter,dpi=300)
+        plt.close('all')
     else:
         plt.show()
           

@@ -727,7 +727,8 @@ class System:
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        x = self.SOR_sub_func(max_iter,x,np.array([self.Nsx,self.Nsy]),
+        x = self.SOR_sub_func(max_iter,x,
+                              np.array([self.Nsx,self.Nsy],dtype=np.int64),
                               sources,w,tol,verbose)
         self.potentials = x[1:-1,1:-1]
         
@@ -780,6 +781,8 @@ class System:
         of all the potentials calculated along the way, for later
         plotting.
         '''
+        self.tol = tol
+        self.w = w
         w = float(w)
         sources = self.sources
         '''
@@ -789,26 +792,26 @@ class System:
         Then 'fill in' the potential at the center of this matrix
         '''
         x = np.zeros((self.Nsx+2,self.Nsy+2))
-        #randomise starting potential
-        x_seed = np.random.random(self.potentials.shape)
-        x_seed[sources] = self.source_potentials[sources]    
-        #randomise starting potential        
-        x[1:-1,1:-1] = x_seed     
+        x[1:-1,1:-1] = self.potentials     
         '''
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        x,all_potentials = self.SOR_sub_func(max_iter,x,
-                                             np.array([self.Nsx,self.Nsy]),
-                                             sources,w,tol,verbose)
+        x,all_potentials = self.SOR_sub_func_anim(max_iter,x,
+                                                  np.array([self.Nsx,self.Nsy],
+                                                           dtype=np.int64),
+                                                  sources,w,tol,verbose)
+
         self.potentials = x[1:-1,1:-1]
         return all_potentials
         
     @staticmethod 
     @jit(nopython=True,cache=True)
     def SOR_sub_func_anim(max_iter,x,Ns,sources,w,tol,verbose):
-        all_potentials = np.zeros((max_iter, Ns, Ns))
+        all_potentials = np.zeros((max_iter, Ns[0], Ns[1]))
+        w_1 = (1.-w)
+        w_4 = (w/(4.))        
         for iteration in range(max_iter):
             all_potentials[iteration] = x[1:-1,1:-1]
             initial_norm = np.linalg.norm(x)
@@ -833,10 +836,10 @@ class System:
                         i_1-1,j_1
                         these are transformed as above (needs fewer operations)
                     '''
-                    x[i_1,j_1] = (1.-w)*x[i_1,j_1] + (w/(4.)) *(x[i_1,j_1+1]+
-                                                                x[i_1,j]+
-                                                                x[i_1+1,j_1]+
-                                                                x[i,j_1])
+                    x[i_1,j_1] = w_1*x[i_1,j_1] + w_4 *(x[i_1,j_1+1]+
+                                                        x[i_1,j]+
+                                                        x[i_1+1,j_1]+
+                                                        x[i,j_1])
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
             if verbose:
