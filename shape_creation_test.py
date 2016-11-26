@@ -11,8 +11,12 @@ from copy import deepcopy
 from system import System,Shape
 import matplotlib.pyplot as plt
 
-Ns = 71
+Ns = (30,60)
+#Ns = 20
 
 test = System(Ns)
-test.add(Shape(Ns,1,(0.5,0.5),0.3,shape='square',filled=False))
+square = Shape(Ns,1,(0.5,1.),0.3,shape='circle',filled=False)
+test.add(square)
 test.show_setup()
+#test.SOR()
+#test.show()

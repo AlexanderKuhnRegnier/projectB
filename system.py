@@ -20,9 +20,18 @@ gridpoints around it (includes boundary conditions if needed).
 Can be combined into a matrix so that the entire system can be solved
 using the relaxation method.
 
+
+26/11/16:
+    Implemented different numbers of grid points along the two axes,
+    where the x-axis is to have a length of 1, regardless of the proportion
+    of the two grid point numbers. 
+    When specifying Ns = (20,40), for example, the grid point at the top right
+    would be at distance r = (1,2) from the origin in the lower left corner.
+    The stepsize is therefore always defined with respect to the number of 
+    grid points along the x axis.
+
 """
 from __future__ import print_function
-from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
@@ -33,12 +42,30 @@ class Shape:
         '''
         'Ns' is the number of gridpoints along an axis, so the
         grid spacing h is the inverse of this, since the axes range from 0 to 1
+        By giving a tuple of (Nsx,Nsy) values, the number of gridpoints along
+        the x and y axis may be specified, resulting in a rectangular grid.
+        The stepsize between the grid points will be kept constant along each
+        axis.
+        The 'length' of the grid in the x direction will be defined as 1,
+        with the 'length' of the grid in the y direction depending on the
+        ratio between the Nsy and Nsx given.
+        If only a single value is given for the 'Ns' argument, the grid will
+        default to being a square grid with Ns gridpoints along each axis.
         '''
-        assert type(Ns)==int, 'Ns should be an integer'
-        self.Ns = Ns
-        self.h = 1./Ns
+        if hasattr(Ns,'__iter__'):
+            Nsx,Nsy = Ns
+        else:
+            Nsx = Ns
+            Nsy = Nsx
+        assert type(Nsx)==int, 'Ns should be an integer'
+        assert type(Nsy)==int, 'Ns should be an integer'
+        self.Nsx = Nsx
+        self.Nsy = Nsy
+        self.aspect_ratio = float(Nsy)/Nsx
+        self.h = 1./Nsx
         self.potential = potential
-        self.grid = np.mgrid[0:1:complex(0, self.Ns), 0:1:complex(0, self.Ns)]
+        self.grid = np.mgrid[0:1:complex(0, self.Nsx), 
+                             0:self.aspect_ratio:complex(0, self.Nsy)]
         self.potentials = np.zeros(self.grid.shape[1:])
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
@@ -57,6 +84,7 @@ class Shape:
         # reshape to (2,1,1) or (3,1,1,1) etc. for correct
         # broadcasting
         abs_diff = np.abs(self.grid - coords)
+#        print('abs diff:\n',abs_diff)
         match = []
         N_dim = self.grid.shape[0]
         for i in range(N_dim):
@@ -73,9 +101,24 @@ class Shape:
         self.potentials[source_coords] = self.potential
         self.sources[source_coords] = True
         self.source_potentials[source_coords] = self.potential        
-        
-#        print('original coords:',coords)
-        print('grid coords    :',source_coords)
+
+    def limiter(self,coord,axis=None):
+        '''
+        Used so that shapes are 'clipped' at the edges of the
+        grid
+        '''
+        if axis=='x':
+            Ns = self.Nsx
+        elif axis=='y':
+            Ns = self.Nsy
+        else:
+            raise Exception("Please select an axis ('x','y')")
+        if coord < 0:
+            return 0
+        elif coord >= Ns:
+            return Ns-1
+        else:
+            return coord
         
     def add_source(self,origin,*args,**kwargs):
         '''
@@ -103,7 +146,7 @@ class Shape:
             'circle':   origin is the centre of the circle
                         coord1 is the radius
         '''
-        self.shape_creation_args.append([self.Ns,self.potential,
+        self.shape_creation_args.append([(self.Nsx,self.Nsy),self.potential,
                                          origin,args,kwargs])
 
         # shape selection
@@ -149,23 +192,17 @@ documentation""".format(len(args),shape))
                 min_y = int(round((origin[1]-height/2.)/self.h))
                 max_x = min_x + width_grid
                 max_y = min_y + height_grid
-                def limiter(coord):
-                    '''
-                    Used so that shapes are 'clipped' at the edges of the
-                    grid
-                    '''
-                    if coord < 0:
-                        return 0
-                    elif coord >= self.Ns:
-                        return self.Ns-1
-                    else:
-                        return coord
-                starts  =    map(limiter,[min_y,min_x,max_y,max_x])
-                targets =    map(limiter,[max_y,max_x,min_y,min_x])
-                keep_fixed = map(limiter,[min_x,max_y,max_x,min_y])
+                
+                min_x = self.limiter(min_x,axis='x')
+                max_x = self.limiter(max_x,axis='x')
+                min_y = self.limiter(min_y,axis='y')
+                max_y = self.limiter(max_y,axis='y')              
+                
+                starts  =    [min_y,min_x,max_y,max_x]
+                targets =    [max_y,max_x,min_y,min_x]
+                keep_fixed = [min_x,max_y,max_x,min_y]
                 changing =   [1,    0,    1,    0    ] #0 for x, 1 for y
                 const = [1,0]
-#                print(origin_grid)
 #                print(starts)
 #                print(targets)
 #                print(keep_fixed)
@@ -236,11 +273,29 @@ class System:
         '''
         'Ns' is the number of gridpoints along an axis, so the
         grid spacing h is the inverse of this, since the axes range from 0 to 1
+        By giving a tuple of (Nsx,Nsy) values, the number of gridpoints along
+        the x and y axis may be specified, resulting in a rectangular grid.
+        The stepsize between the grid points will be kept constant along each
+        axis.
+        The 'length' of the grid in the x direction will be defined as 1,
+        with the 'length' of the grid in the y direction depending on the
+        ratio between the Nsy and Nsx given.
+        If only a single value is given for the 'Ns' argument, the grid will
+        default to being a square grid with Ns gridpoints along each axis.
         '''
-        assert type(Ns)==int, 'Ns should be an integer'
-        self.Ns = Ns
-        self.h = 1./Ns
-        self.grid = np.mgrid[0:1:complex(0, self.Ns), 0:1:complex(0, self.Ns)]
+        if hasattr(Ns,'__iter__'):
+            Nsx,Nsy = Ns
+        else:
+            Nsx = Ns
+            Nsy = Nsx
+        assert type(Nsx)==int, 'Ns should be an integer'
+        assert type(Nsy)==int, 'Ns should be an integer'
+        self.Nsx = Nsx
+        self.Nsy = Nsy
+        self.aspect_ratio = float(Nsy)/Nsx
+        self.h = 1./Nsx
+        self.grid = np.mgrid[0:1:complex(0, self.Nsx), 
+                             0:self.aspect_ratio:complex(0, self.Nsy)]
         self.potentials = np.zeros(self.grid.shape[1:])
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
@@ -254,7 +309,8 @@ class System:
             has been assigned to a source, its potential will remain fixed
             throughout.
         '''
-        assert shape_instance.Ns == self.Ns, 'Grids should be the same'
+        assert shape_instance.Nsx == self.Nsx, 'Grids should be the same'
+        assert shape_instance.Nsy == self.Nsy, 'Grids should be the same'        
         self.potentials += shape_instance.potentials
         self.sources += shape_instance.sources
         self.source_potentials += shape_instance.source_potentials
@@ -263,23 +319,32 @@ class System:
            
     def sampling(self,Ns_new):
         '''
+        Tuple Ns_new
+        
         Interpolate the known potentials ('potentials_old') based on the 
         current grid sizing ('Ns_old') and use this to determine the 
         potentials on a new grid sizing given by 'Ns_new'
         '''
         U,V = np.gradient(self.potentials)
+        new_aspect_ratio = float(Ns_new[1])/Ns_new[0]
+        aspect_ratio_ratio = self.aspect_ratio/new_aspect_ratio
         '''
         U gives gradient at each grid point going "down" the columns,
         V gives the gradient at each grid point going "right" along the rows
         '''
-        new_potentials = self.sampling_sub_func(self.Ns,Ns_new,self.potentials,
-                                                U,V)
+        new_potentials = self.sampling_sub_func(np.array([self.Nsx,self.Nsy]),
+                                                np.array(Ns_new),
+                                                self.potentials,U,V,
+                                                aspect_ratio_ratio)
         return new_potentials
         
     @staticmethod
-    @jit(nopython=True,cache=True)
-    def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V):
+#    @jit(nopython=True,cache=True)
+    def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V,
+                          aspect_ratio_ratio):
         '''
+        Array Ns_old, Ns_new
+        
         First go down the columns, and create an array of new potentials based
         on this.
         Select the column with index j
@@ -297,40 +362,65 @@ class System:
         between two adjacents columns / rows will be small will become more
         valid as the physical spacing between grid points decreases, as well.
         '''        
-        h_old = 1./Ns_old
-        h_new = 1./Ns_new
-        new_h_values = np.arange(Ns_new)*h_new
-        point_on_old = (new_h_values/h_old)
-        point_on_old_int = np.zeros(point_on_old.shape[0],dtype=np.int64)
-        for i in range(point_on_old.shape[0]):
-            point_on_old_int[i] = int(point_on_old[i])
-        distances = point_on_old - point_on_old_int
-        new_potentials_rowwise = np.zeros((Ns_new,Ns_new))
-        for j_new in range(Ns_new):
-            j_old = point_on_old_int[j_new]
+        h_old = 1./Ns_old[0]
+        h_new = 1./Ns_new[0]
+        new_h_values_x = np.arange(Ns_new[0])*h_new
+        new_h_values_y = np.arange(Ns_new[1])*h_new*aspect_ratio_ratio
+        
+        point_on_old_x = (new_h_values_x/h_old)
+        point_on_old_int_x = np.zeros(point_on_old_x.shape[0],dtype=np.int64)
+        for i in range(point_on_old_x.shape[0]):
+            point_on_old_int_x[i] = int(point_on_old_x[i])
+        distances_x = point_on_old_x - point_on_old_int_x
+        
+        point_on_old_y = (new_h_values_y/h_old)
+        point_on_old_int_y = np.zeros(point_on_old_y.shape[0],dtype=np.int64)
+        for i in range(point_on_old_y.shape[0]):
+            point_on_old_int_y[i] = int(point_on_old_y[i])
+        distances_y = point_on_old_y - point_on_old_int_y     
+    
+        print('ns new',Ns_new)
+        print('ns old',Ns_old)
+        print('new h values x',new_h_values_x)
+        print('point on old x',point_on_old_x)
+        print('point on old x int',point_on_old_int_x)
+#        print('distances x',distances_x)        
+        
+        print('new h values y',new_h_values_y)
+        print('point on old y',point_on_old_y)
+        print('point on old y int',point_on_old_int_y) 
+#        print('distances y:',distances_y)
+        
+        print('U shape',U.shape)
+        print('V shape',V.shape)
+        
+        
+        new_potentials_rowwise = np.zeros((Ns_new[0],Ns_new[1]))
+        for j_new in range(Ns_new[1]):
+            j_old = point_on_old_int_y[j_new]
             column_potentials_old = potentials_old[:,j_old]
             gradients = U[:,j_old]
-            for i_new in range(Ns_new):
-                i_old = point_on_old_int[i_new]
+            for i_new in range(Ns_new[0]):
+                i_old = point_on_old_int_x[i_new]
                 new_potentials_rowwise[i_new,j_new] = (
                                                 column_potentials_old[i_old]+
                                                 gradients[i_old]*
-                                                distances[i_new])
+                                                distances_x[i_new])
         '''
         Now repeat the above, just for the columns, and then average the
         results in order to get the final estimate.
-        '''
-        new_potentials_columnwise = np.zeros((Ns_new,Ns_new))        
-        for i_new in range(Ns_new):
-            i_old = point_on_old_int[i_new]
+        '''  
+        new_potentials_columnwise = np.zeros((Ns_new[0],Ns_new[1]))        
+        for i_new in range(Ns_new[0]):
+            i_old = point_on_old_int_x[i_new]
             row_potentials_old = potentials_old[i_old,:]
-            gradients = V[:,i_old]
-            for j_new in range(Ns_new):
-                j_old = point_on_old_int[j_new]
+            gradients = V[i_old,:]
+            for j_new in range(Ns_new[1]):
+                j_old = point_on_old_int_y[j_new]
                 new_potentials_columnwise[i_new,j_new] = (
                                                  row_potentials_old[j_old]+
                                                  gradients[j_old]*
-                                                 distances[j_new])
+                                                 distances_y[j_new])
         new_potentials = (new_potentials_rowwise+new_potentials_columnwise)/2.
         return new_potentials            
         
@@ -343,6 +433,8 @@ class System:
         procedure can be repeated several times by repeatedly calling this
         function.
         '''
+        if not hasattr(Ns,'__iter__'):
+            Ns = (Ns,Ns)        
         preconditioning_system = System(Ns)
         '''
         Now need to add the desired shapes to the preconditioning_system,
@@ -355,7 +447,9 @@ class System:
         for creation_args in self.shape_creation_args:
             new_args = creation_args[:] #copy so original is not changed!
             new_args[0] = Ns #replace old grid resolution with new resolution!
-            preconditioning_system.add(Shape(new_args[0],new_args[1],new_args[2],*new_args[3],**new_args[4]))
+            preconditioning_system.add(Shape(new_args[0],new_args[1],
+                                             new_args[2],*new_args[3],
+                                             **new_args[4]))
 
         '''
         Need to translate the current potentials to the grid, use the 
@@ -364,7 +458,10 @@ class System:
         Uses current potential, since this may have been updated by
         previous preconditioning (and would therefore not simply be
         all 0s anymore).
-        '''                                            
+        '''                                  
+    
+#        preconditioning_system.show_setup(title='precon setup')
+        
         preconditioning_system.potentials = self.sampling(Ns)
         '''
         Set the source terms back to their proper values based on the assigned
@@ -372,6 +469,21 @@ class System:
         corrupt this
         '''
 #        preconditioning_system.show(title='precon1')
+        '''
+        Especially with differing aspect ratios, this often interferes with
+        the proper placement of the source. The same effect can be observed 
+        with identical aspect ratios, since the placement of the source(s)
+        will differ from the expected placement on the 'original' fine grid,
+        due to the discreteness of the grid.
+        Need to change the position of the sources according to the ratio 
+        between the aspect ratios, only the y position would have to be 
+        changed, which would be then when creating the shapes in the 
+        first place above.
+        This can be ignored if the ratio of aspect ratios is small, since
+        the error assocaited with this would then be smaller than the
+        discretisation error which exists regardless.
+        '''
+        
         preconditioning_system.potentials[preconditioning_system.sources] = (
                                      preconditioning_system.source_potentials[
                                      preconditioning_system.sources])
@@ -382,7 +494,7 @@ class System:
         
 #        preconditioning_system.show(title='precon3')
         
-        new_potenials = preconditioning_system.sampling(self.Ns)
+        new_potenials = preconditioning_system.sampling((self.Nsx,self.Nsy))
         '''
         Reset the source terms once again after assigning them back to self
         '''
@@ -398,7 +510,7 @@ class System:
         Ideally, the number of grid points should be an ODD number for this
         to work ideally - due to the symmetry of the problem
         '''
-        mid_row_index = int((self.Ns-1)/2.)
+        mid_row_index = int((self.Nsx-1)/2.)
         cross_section = self.potentials[mid_row_index]
         plt.figure()
         plt.title('1-D Cross-Section of the Potential across the System\n'
@@ -478,18 +590,18 @@ class System:
             plt.title(title)
         plt.show()
     def create_method_matrix(self):
-        N = self.Ns**2
+        N = self.Nsx**2
         self.A = np.zeros((N, N))
         boundary_conditions = []
         for i in range(N):
             boundaries_row = []
-            coord1 = int(float(i)/self.Ns)
-            coord2 = i%self.Ns
+            coord1 = int(float(i)/self.Nsx)
+            coord2 = i%self.Nsx
             self.A[i,i] = -4
             for c1,c2 in zip([coord1,coord1,coord1-1,coord1+1],
                              [coord2-1,coord2+1,coord2,coord2]):
                 try:
-                    if c1==-1 or c2==-1 or c1>self.Ns-1 or c2>self.Ns-1:
+                    if c1==-1 or c2==-1 or c1>self.Nsx-1 or c2>self.Nsx-1:
                         raise IndexError
                     elif c1 == coord1-1:
                         '''
@@ -497,9 +609,9 @@ class System:
                         column cannot have changed, so move
                         by Ns along row
                         '''
-                        self.A[i,i-self.Ns] = 1
+                        self.A[i,i-self.Nsx] = 1
                     elif c1 == coord1+1:
-                        self.A[i,i+self.Ns] = 1
+                        self.A[i,i+self.Nsx] = 1
                     elif c2 == coord2-1:
                         self.A[i,i-1]=1
                     elif c2 == coord2+1:
@@ -511,7 +623,8 @@ class System:
             boundary_conditions.append(boundaries_row)
         self.boundary_conditions = boundary_conditions
     def jacobi(self, tol=1e-3, max_iter=5000, verbose=True):
-        N = self.Ns**2
+        assert self.Nsx == self.Nsy,'Jacobi method requires a square grid'
+        N = self.Nsx**2
         self.create_method_matrix()
         b = np.zeros(N)
         #get diagonal, D
@@ -540,9 +653,10 @@ class System:
                 print("i,diff:",i,diff)
             if diff < tol:
                 break
-        self.potentials = x.reshape(self.Ns,-1)
+        self.potentials = x.reshape(self.Nsx,-1)
     def gauss_seidel(self, tol=1e-3, max_iter=5000, verbose=True):
-        N = self.Ns**2
+        assert self.Nsx == self.Nsy,'Gauss Seidel method requires a square grid'        
+        N = self.Nsx**2
         #create array (matrix) A
         self.create_method_matrix()
         b = np.zeros(N)
@@ -577,7 +691,7 @@ class System:
             if diff < tol:
                 break
             #print ''
-        self.potentials = x.reshape(self.Ns, -1)
+        self.potentials = x.reshape(self.Nsx, -1)
     def SOR(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True):
         '''
         A = L + D + U
@@ -593,7 +707,6 @@ class System:
         '''
         self.tol = tol
         self.w = w
-        Ns = self.Ns
         w = float(w)
         sources = self.sources
         '''
@@ -606,7 +719,7 @@ class System:
         this is done at instance creation anyway, plus this overwrites 
         later changes to the potential with preconditioning, for example
         '''
-        x = np.zeros((Ns+2,Ns+2))
+        x = np.zeros((self.Nsx+2,self.Nsy+2))
         #x[1:-1,1:-1] = self.source_potentials
         x[1:-1,1:-1] = self.potentials
         '''
@@ -614,7 +727,8 @@ class System:
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        x = self.SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose)
+        x = self.SOR_sub_func(max_iter,x,np.array([self.Nsx,self.Nsy]),
+                              sources,w,tol,verbose)
         self.potentials = x[1:-1,1:-1]
         
     @staticmethod
@@ -624,9 +738,9 @@ class System:
         w_4 = (w/(4.))
         for iteration in range(max_iter):
             initial_norm = np.linalg.norm(x)
-            for i in range(0,Ns):
+            for i in range(0,Ns[0]):
                 i_1 = i+1
-                for j in range(0,Ns):
+                for j in range(0,Ns[1]):
                     j_1 = j+1
                     if sources[i,j]:
                         continue
@@ -666,7 +780,6 @@ class System:
         of all the potentials calculated along the way, for later
         plotting.
         '''
-        Ns = self.Ns
         w = float(w)
         sources = self.sources
         '''
@@ -675,7 +788,7 @@ class System:
         execution.
         Then 'fill in' the potential at the center of this matrix
         '''
-        x = np.zeros((Ns+2,Ns+2))
+        x = np.zeros((self.Nsx+2,self.Nsy+2))
         #randomise starting potential
         x_seed = np.random.random(self.potentials.shape)
         x_seed[sources] = self.source_potentials[sources]    
@@ -686,7 +799,9 @@ class System:
         could use pre-conditioning with coarse grid, which is initialised
         with
         '''
-        x, all_potentials = self.SOR_sub_func_anim(max_iter,x,Ns,sources,w,tol,verbose)
+        x,all_potentials = self.SOR_sub_func(max_iter,x,
+                                             np.array([self.Nsx,self.Nsy]),
+                                             sources,w,tol,verbose)
         self.potentials = x[1:-1,1:-1]
         return all_potentials
         
@@ -697,9 +812,9 @@ class System:
         for iteration in range(max_iter):
             all_potentials[iteration] = x[1:-1,1:-1]
             initial_norm = np.linalg.norm(x)
-            for i in range(0,Ns):
+            for i in range(0,Ns[0]):
                 i_1 = i+1
-                for j in range(0,Ns):
+                for j in range(0,Ns[1]):
                     j_1 = j+1
                     if sources[i,j]:
                         continue
