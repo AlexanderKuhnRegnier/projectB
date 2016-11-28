@@ -11,12 +11,18 @@ from copy import deepcopy
 from system import System,Shape
 import matplotlib.pyplot as plt
 
-Ns = (30,60)
-#Ns = 20
-
+Ns = 100
 test = System(Ns)
-square = Shape(Ns,1,(0.5,1.),0.3,shape='circle',filled=False)
+square = Shape(Ns,1,(0.5,1.),0.3,shape='square',filled=True)
+test.add(square)
+test.SOR()
+test.show_setup()
+test.cross_section()
+
+Ns = 1000
+test = System(Ns)
+square = Shape(Ns,1,(0.5,1.),0.3,shape='square',filled=True)
 test.add(square)
 test.show_setup()
-#test.SOR()
-#test.show()
+test.SOR()
+test.cross_section()

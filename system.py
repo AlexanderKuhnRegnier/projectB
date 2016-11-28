@@ -57,10 +57,10 @@ class Shape:
         else:
             Nsx = Ns
             Nsy = Nsx
-        assert type(Nsx)==int, 'Ns should be an integer'
-        assert type(Nsy)==int, 'Ns should be an integer'
-        self.Nsx = Nsx
-        self.Nsy = Nsy
+#        assert type(Nsx)==int, 'Ns should be an integer'
+#        assert type(Nsy)==int, 'Ns should be an integer'
+        self.Nsx = int(Nsx)
+        self.Nsy = int(Nsy)
         self.aspect_ratio = float(Nsy)/Nsx
         self.h = 1./Nsx
         self.potential = potential
@@ -288,10 +288,10 @@ class System:
         else:
             Nsx = Ns
             Nsy = Nsx
-        assert type(Nsx)==int, 'Ns should be an integer'
-        assert type(Nsy)==int, 'Ns should be an integer'
-        self.Nsx = Nsx
-        self.Nsy = Nsy
+#        assert type(Nsx)==int, 'Ns should be an integer'
+#        assert type(Nsy)==int, 'Ns should be an integer'
+        self.Nsx = int(Nsx)
+        self.Nsy = int(Nsy)
         self.aspect_ratio = float(Nsy)/Nsx
         self.h = 1./Nsx
         self.grid = np.mgrid[0:1:complex(0, self.Nsx), 
@@ -341,7 +341,7 @@ class System:
         return new_potentials
         
     @staticmethod
-    @jit(nopython=True,cache=True)
+#    @jit(nopython=True,cache=True)
     def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V,
                           aspect_ratio_ratio):
         '''
@@ -387,12 +387,12 @@ class System:
 #        print('point on old x',point_on_old_x)
 #        print('point on old x int',point_on_old_int_x)
 #        print('distances x',distances_x)        
-        
+#        
 #        print('new h values y',new_h_values_y)
 #        print('point on old y',point_on_old_y)
 #        print('point on old y int',point_on_old_int_y) 
 #        print('distances y:',distances_y)
-        
+#        
 #        print('U shape',U.shape)
 #        print('V shape',V.shape)
         
@@ -694,7 +694,8 @@ class System:
                 break
             #print ''
         self.potentials = x.reshape(self.Nsx, -1)
-    def SOR(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True):
+    def SOR(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True,
+            boundary_conditions=None):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -721,7 +722,19 @@ class System:
         this is done at instance creation anyway, plus this overwrites 
         later changes to the potential with preconditioning, for example
         '''
-        x = np.zeros((self.Nsx+2,self.Nsy+2))
+        
+        if boundary_conditions is None:
+            boundary_conditions = np.zeros((self.Nsx+2,self.Nsy+2))
+        assert boundary_conditions.shape == (self.Nsx+2,self.Nsy+2),(
+                'The array should have shape (Nsx+2,Nsy+2)')   
+        
+        plt.figure()
+        plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
+        plt.title('boundary conditions')
+        plt.colorbar()
+        plt.show()
+        
+        x = boundary_conditions
         #x[1:-1,1:-1] = self.source_potentials
         x[1:-1,1:-1] = self.potentials
         '''
@@ -849,6 +862,230 @@ class System:
             if diff < tol:
                 break              
         return x,all_potentials[:iteration+1,...]
+    
+    def separate_sources(self):
+        self.point_sources = [args for args in self.shape_creation_args 
+                              if args[-1].get('shape','rectangle') == 'point']
+        self.rectangle_sources = [args for args in self.shape_creation_args
+                                  if args[-1].get('shape','rectangle') in 
+                                  ['square','rectangle']]          
+    def AMR_static(self,origin,width_height,zoom,**SOR_args):
+        '''
+        Only rectangles / point sources supported
+        
+        Default shape is 'rectangle'
+        Default filled status is True
+        '''
+        origin = np.array(origin)
+        assert type(zoom) == int,'Zoom should be an integer'
+        if not hasattr(width_height,'__iter__'):
+            width_height = np.array([width_height,width_height])
+        '''
+        Need to leave at least one row/column free in order to create
+        boundary conditions 
+        '''
+        if ( np.any(origin - width_height < 1) or
+             np.any(origin + width_height > np.array((self.Nsx-1,self.Nsy-1)))
+           ):
+            raise Exception(('Need to leave at least 1 row/column gap between'+
+                             ' selection window and system'))
+        new_Ns = np.array(width_height)*zoom
+        new_Ns = np.array(new_Ns,dtype=np.int64)
+        print('new Ns:',new_Ns)
+        AMR_system = System(new_Ns)               
+        '''
+        Grab the necessary potentials from the original system, and then
+        upsample them to the desired grid resolution.
+        Then insert these as the initial conditions into the SOR method
+        These new upsampled potentials will have shape (new_Ns+2,new_Ns+2)
+        '''
+        #Need to evalute original system before selecting boundary conditions
+        self.SOR(**SOR_args)
+        self.show(title='self')        
+        min_row = int(origin[0] - width_height[0]/2.)
+        max_row = min_row + width_height[0]
+        min_column = int(origin[1] - width_height[1]/2.)
+        max_column = min_column + width_height[1]
+        potential_selection = self.potentials[min_row-1:max_row+1,
+                                              min_column-1:max_column+1]
+        print(min_row,max_row,min_column,max_column)
+        print('selection shape',potential_selection.shape)
+        U,V = np.gradient(potential_selection)
+        new_potentials = self.sampling_sub_func(np.array((width_height[0]+2,
+                                                          width_height[1]+2),
+                                                         dtype=np.int64),
+                                                np.array((new_Ns[0]+2*zoom,
+                                                          new_Ns[1]+2*zoom),
+                                                         dtype=np.int64),
+                                                potential_selection,U,V,1.)
+
+        print('new pot.')
+        print(new_potentials)
+        print(np.max(U),np.min(U))
+        print(np.max(V),np.min(V))
+        boundaries = new_potentials[zoom-1:-(zoom-1),zoom-1:-(zoom-1)]
+        boundaries[1:-1,1:-1] = np.zeros((new_Ns[0],new_Ns[1]))
+        print('new potentials shape',new_potentials.shape)
+        print('boundaries shape',boundaries.shape)
+        '''
+        Transform the shape creation arguments from the original system
+        to the new 'zoomed in' system, so that the sources can be recreated
+        in the new system.
+        '''     
+        origin_coords = np.array(origin)*self.h
+        '''
+        
+        vertex 2    +--------+   vertex 3
+                    |        |
+                    |        |
+        vertex 1    +--------+   vertex 4
+        '''        
+        width_height_coords = np.array(width_height)*self.h
+        lower_left_coords = origin_coords - width_height_coords/2.
+        vertices_coords = (
+                   [origin_coords - width_height_coords/2.,
+                    origin_coords + np.array([-width_height_coords[0]/2.,
+                                              width_height_coords[1]/2.]),
+                    origin_coords + width_height_coords/2.,
+                    origin_coords + np.array([width_height_coords[0]/2.,
+                                              -width_height_coords[1]/2.])])
+        
+        print('window vertices\n',vertices_coords)
+        upper_right_coords = origin_coords + width_height_coords/2.
+        width_coords = upper_right_coords[0]-lower_left_coords[0]
+        height_coords = upper_right_coords[1] - lower_left_coords[0]
+
+        window_warning = 'Selection window should not extend beyond system'
+        assert np.all(lower_left_coords>=np.array([0,0])),window_warning
+        assert np.all(upper_right_coords<=np.array([1,1])),window_warning        
+        
+        self.separate_sources()
+        to_plot = []   
+                          
+        for source in self.point_sources:
+            source = source[:]
+            source_origin = source[2]
+            source_origin = np.array(source_origin)
+#            print(source_origin,origin_coords)
+            diffs = source_origin - origin_coords
+#            print('diffs',diffs)
+#            print(width_height_coords/2.)
+            if np.all(np.abs(diffs)<width_height_coords/2.):
+                '''
+                Modify source coordinates to fit the new coordinate system
+                given by the selection window.
+                '''
+                source[0] = new_Ns
+#                print('lower left',lower_left_coords)
+                subtracted = source[2] - lower_left_coords
+                scaled = np.array(subtracted)/np.array(width_coords,
+                                                       height_coords)
+                source[2] = scaled
+#                print('sub',subtracted)
+#                print('scaled',scaled)
+                to_plot.append(source)
+#        print('new ns',new_Ns,new_Ns.dtype)
+        
+        for source in self.rectangle_sources:
+            source = source[:]
+            source_origin = np.array(source[2])
+            print('args',source)
+            width = source[-2][0]
+            if source[-1].get('shape','rectangle') == 'square':
+                height = width
+            else:
+                height = source[-2][1]
+            '''
+            
+            vertex 2    +--------+   vertex 3
+                        |        |
+                        |        |
+            vertex 1    +--------+   vertex 4
+            '''
+            vertices = [np.array([source_origin[0]-width/2.,
+                                  source_origin[1]-height/2.]),
+                        np.array([source_origin[0]-width/2.,
+                                  source_origin[1]+height/2.]),          
+                        np.array([source_origin[0]+width/2.,
+                                  source_origin[1]+height/2.]),
+                        np.array([source_origin[0]+width/2.,
+                                  source_origin[1]-height/2.])]
+            print('vertices\n',vertices)
+            '''
+            0 or 1 vertices are expected to overlap into the selection window
+            The selection window may also lie in between two vertices            
+            '''
+            origin_diff = source_origin - origin_coords
+            if np.all(np.abs(origin_diff)<(width_height_coords/2.+
+                                     np.array([width,height])/2.)):
+                print('accepted diff',origin_diff)
+                source[0] = new_Ns                
+                '''
+                Assign new width and height based on the overlap between
+                the shape and the window
+                '''
+                window_x = np.array([vertices_coords[0][0],vertices_coords[-1][0]])
+                window_y = np.array([vertices_coords[0][1],vertices_coords[1][1]])
+                source_x = np.array([vertices[0][0],vertices[-1][0]])
+                source_y = np.array([vertices[0][1],vertices[1][1]])
+                low_x =  (source_x[0] if source_x[0] > window_x[0]
+                                      else window_x[0])
+                high_x = (source_x[1] if source_x[1] < window_x[1]
+                                      else window_x[1])
+                low_y =  (source_y[0] if source_y[0] > window_y[0]
+                                      else window_y[0])
+                high_y = (source_y[1] if source_y[1] < window_y[1]
+                                      else window_y[1])
+        
+                new_width = high_x - low_x
+                new_height = high_y - low_y
+                print('new width, height',new_width,new_height)
+                source[3] = (np.array((new_width,new_height))/
+                                                    np.array(width_coords,
+                                                             height_coords))
+                '''
+                Assign new origin to the rectangle, based on the 
+                dimensions calculated
+                '''                     
+                new_origin = (np.mean([high_x,low_x]),np.mean([high_y,low_y]))
+                subtracted = new_origin - lower_left_coords
+                scaled = np.array(subtracted)/np.array(width_coords,
+                                                       height_coords)
+                source[2] = scaled
+                print(low_x,high_x,low_y,high_y)
+                print('to append\n',source)
+                to_plot.append(source)  
+            
+        for shape_args in to_plot:
+#            print('args',shape_args)
+            AMR_system.add(Shape(shape_args[0],shape_args[1],shape_args[2],
+                                 *shape_args[3],**shape_args[4]))
+
+        print('final args\n',AMR_system.shape_creation_args)
+        AMR_system.show_setup()
+        
+        '''
+        Calculate the potential using the previously determined 
+        boundary conditions
+        '''
+        AMR_system.show(title='AMR not solved')
+        print('bound.\n',boundaries)
+        AMR_system.SOR(boundary_conditions=boundaries,**SOR_args)
+        AMR_system.show(title='AMR solved')
+        plt.figure()
+        plt.title('AMR test')
+        ax = plt.gca()
+        ax.set_xlim(0,1)
+        ax.set_ylim(0,1)
+        ax.imshow(self.potentials.T,origin='lower',interpolation='none',
+                   extent=(0,1,0,1))
+        ax.imshow(AMR_system.potentials.T,origin='lower',
+                  interpolation='none',
+                  extent=(lower_left_coords[0],
+                          upper_right_coords[0],
+                          lower_left_coords[1],
+                          upper_right_coords[1]),alpha=0.6)
+        
         
 if __name__ == '__main__': 
     Ns = 81
