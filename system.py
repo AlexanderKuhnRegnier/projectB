@@ -119,7 +119,7 @@ class Shape:
             return Ns-1
         else:
             return coord
-        
+             
     def add_source(self,origin,*args,**kwargs):
         '''
         *args: coord1[,coord2]
@@ -235,18 +235,88 @@ documentation""".format(len(args),shape))
                 print(not_implemented_message)
         elif shape == 'circle':
             if len(args) == 1:
-                print("Adding circle centred at {:} with radius {:}".format(
-                origin,args[0]))
-                # interval of angles calculated so that every grid point
-                # should be covered ~1-2 times for a given radius, to make
-                # sure that every grid point is covered
-                r = args[0]
-                d_theta = self.h/(2*r)
-                for theta in np.arange(0,2*np.pi,d_theta):
-                    self.add_closest_gridpoint((origin[0]+r*np.sin(theta),
-                                                origin[1]+r*np.cos(theta)))
                 if filled:
-                    self.fill()
+                    print("Adding filled circle centred at {:} with radius {:}"
+                            .format(origin,args[0])) 
+                    mask = ((self.grid[0]-origin[0])**2 + 
+                            (self.grid[1]-origin[1])**2) < args[0]**2
+                    self.potentials[mask] = self.potential
+                    self.sources[mask] = True
+                    self.source_potentials[mask] = self.potential
+                else:
+                    print("Adding circle centred at {:} with radius {:}".format(
+                    origin,args[0]))
+                    origin_coords = (int(origin[0]/self.h),int(origin[1]/self.h))
+                    '''
+                    # interval of angles calculated so that every grid point
+                    # should be covered ~1-2 times for a given radius, to make
+                    # sure that every grid point is covered
+                    r = args[0]
+                    d_theta = self.h/(2*r)
+                    for theta in np.arange(0,2*np.pi,d_theta):
+                        self.add_closest_gridpoint((origin[0]+r*np.sin(theta),
+                                                    origin[1]+r*np.cos(theta)))
+                    '''
+                    '''
+                    Calculate for first quadrant, which should then map onto
+                    all other coordinates, as they are symmetrical
+                    First octant 'ends' when two consecutive intervals 
+                    feature a change in both x and y grid points, as 
+                    before, only the y grid point will change with every iteration,
+                    and the x coordinate only occasionally.
+                    The first octant also ends when x=y, assuming that 
+                    one starts from y = 0 on the right upper quadrant.
+                    '''
+                    x = int(args[0]/self.h)  
+                    y = 0
+                    err = (5./4)-x  #initialise with 5/4 - r - Mid point algorithm
+                    indices = [[],[]]
+                    while (x >= y):
+                        r = (origin_coords[0]+x,origin_coords[1]+y)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]+x,origin_coords[1]-y)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]+y,origin_coords[1]+x)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]+y,origin_coords[1]-x)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                                                                
+                        r = (origin_coords[0]-x,origin_coords[1]+y)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]-x,origin_coords[1]-y)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]-y,origin_coords[1]+x)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        r = (origin_coords[0]-y,origin_coords[1]-x)
+                        indices[0].append(r[0])
+                        indices[1].append(r[1])
+                        
+                        y += 1
+                        err += 1 + 2*y
+                        if (2*(err-x)) + 1 > 0:
+                            x -= 1
+                            err += 1 - 2*x
+                            
+#                    tuple_x,tuple_y = tuple(indices[0]),tuple(indices[1])
+                    #comparably small loss in speed due to below
+                    tuple_x = tuple([self.limiter(i,axis='x') for i in indices[0]])
+                    tuple_y = tuple([self.limiter(i,axis='y') for i in indices[1]])
+                    self.potentials[tuple_x,tuple_y] = self.potential
+                    self.sources[tuple_x,tuple_y] = True
+                    self.source_potentials[tuple_x,tuple_y] = self.potential
             else:
                 print(not_implemented_message)
         else:
@@ -341,7 +411,7 @@ class System:
         return new_potentials
         
     @staticmethod
-#    @jit(nopython=True,cache=True)
+    @jit(nopython=True,cache=True)
     def sampling_sub_func(Ns_old,Ns_new,potentials_old,U,V,
                           aspect_ratio_ratio):
         '''
@@ -554,7 +624,7 @@ class System:
         fields = np.sqrt(U**2+V**2)
         U = -U.T
         V = -V.T        
-        X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
+        X,Y = np.meshgrid(np.arange(self.Nsx),np.arange(self.Nsy))
         lw = 8*fields/np.max(fields)
         plt.streamplot(X, Y, U, V,
                        density = [1,1],
@@ -577,7 +647,7 @@ class System:
             U,V = np.gradient(self.potentials)
     #        U = U[::every,::every]
     #        V = V[::every,::every]
-            X,Y = np.meshgrid(np.arange(self.Ns),np.arange(self.Ns))
+            X,Y = np.meshgrid(np.arange(self.Nsx),np.arange(self.Nsy))
             '''
             Have to take transpose of potential gradients, but not of the 
             positions, due to the different ways that mgrid and meshgrid
@@ -680,14 +750,14 @@ class System:
         #randomise starting potential
 
         for i in range(max_iter):
-            #print "before\n",x.reshape(self.Ns,-1)
+            #print "before\n",x.reshape(self.Nsx,-1)
             initial_norm = np.linalg.norm(x)
             x = np.dot(T,x).reshape(-1,) + L_D_inv_b
             x[sources] = orig_x[sources]
             #print "sources",x[sources]
             final_norm = np.linalg.norm(x)
             diff = np.abs(initial_norm-final_norm)
-            #print "after\n",x.reshape(self.Ns,-1)
+            #print "after\n",x.reshape(self.Nsx,-1)
             if verbose:
                 print("i,diff:",i,diff)
             if diff < tol:
@@ -728,11 +798,13 @@ class System:
         assert boundary_conditions.shape == (self.Nsx+2,self.Nsy+2),(
                 'The array should have shape (Nsx+2,Nsy+2)')   
         
+        '''
         plt.figure()
         plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
         plt.title('boundary conditions')
         plt.colorbar()
         plt.show()
+        '''
         
         x = boundary_conditions
         #x[1:-1,1:-1] = self.source_potentials
@@ -1101,7 +1173,8 @@ if __name__ == '__main__':
     '''
 #    test.add(Shape(Ns,1,(0.3,0.5),0.01,0.5))
 #    test.add(Shape(Ns,-1,(0.7,0.5),0.01,0.5))
-    test.add(Shape(Ns,1,(0.5,0.5)))
+    test.add(Shape(Ns,1,(0.5,0.5),0.4))
+    test.show_setup()
     calc = True
     tol = 1e-6
     max_iter = 100

@@ -11,18 +11,13 @@ from copy import deepcopy
 from system import System,Shape
 import matplotlib.pyplot as plt
 
-Ns = 100
+start = clock()
+Ns = 500
 test = System(Ns)
-square = Shape(Ns,1,(0.5,1.),0.3,shape='square',filled=True)
-test.add(square)
-test.SOR()
-test.show_setup()
-test.cross_section()
-
-Ns = 1000
-test = System(Ns)
-square = Shape(Ns,1,(0.5,1.),0.3,shape='square',filled=True)
-test.add(square)
-test.show_setup()
-test.SOR()
-test.cross_section()
+circle = Shape(Ns,1,(0.5,0.5),0.2,shape='circle',filled=False)
+test.add(circle)
+print 'time:',clock()-start
+test.SOR(verbose=False,tol=1e-2)
+#test.show_setup()
+#test.cross_section()
+test.show(quiver=True,every=50)

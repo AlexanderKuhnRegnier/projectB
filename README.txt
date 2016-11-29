@@ -1,0 +1,1 @@
+Need to run 'conda update numba' or equivalent, eg. 'pip install numba --upgrade' in order to run the code, as some of the functions used in the jit decorated functions are only available in newer versions of numba than the one currently installed by default on the college computers.
