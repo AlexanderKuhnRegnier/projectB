@@ -12,7 +12,7 @@ from system import System,Shape
 import matplotlib.pyplot as plt
 
 start = clock()
-Ns = 500
+Ns = 300
 test = System(Ns)
 circle = Shape(Ns,1,(0.5,0.5),0.2,shape='circle',filled=False)
 test.add(circle)

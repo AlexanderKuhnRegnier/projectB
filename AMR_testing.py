@@ -18,4 +18,4 @@ point = Shape(Ns,1,(0.55,0.5),0.05,0.3,shape='rectangle')
 test.add(point)
 test.show_setup('original system')
 
-test.AMR_static((25,25),(10,20),20,max_iter=200,tol=1e-4,verbose=False)
+test.AMR_static((25,25),(10,20),10,max_iter=10000,tol=1e-5,verbose=False)

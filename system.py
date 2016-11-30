@@ -370,7 +370,7 @@ class System:
         self.sources = np.zeros(self.potentials.shape,dtype=np.bool)
         self.source_potentials = np.zeros(self.sources.shape)
         self.shape_creation_args = []    
-        self.shapes = []
+#        self.shapes = []
         
     def add(self,shape_instance):
         '''
@@ -384,7 +384,10 @@ class System:
         self.potentials += shape_instance.potentials
         self.sources += shape_instance.sources
         self.source_potentials += shape_instance.source_potentials
-        self.shapes.append(shape_instance) 
+#        don't store the shape instance, as this uses a lot of RAM and is
+#        not really used throughout the code
+#        self.shapes.append(shape_instance) 
+        
         self.shape_creation_args.extend(shape_instance.shape_creation_args)
            
     def sampling(self,Ns_new):
@@ -794,25 +797,36 @@ class System:
         '''
         
         if boundary_conditions is None:
+            print('no boundary conditions!')
             boundary_conditions = np.zeros((self.Nsx+2,self.Nsy+2))
         assert boundary_conditions.shape == (self.Nsx+2,self.Nsy+2),(
                 'The array should have shape (Nsx+2,Nsy+2)')   
         
         '''
+        print('boundary conditions\n',boundary_conditions)        
+        
         plt.figure()
         plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
-        plt.title('boundary conditions')
+        plt.title('boundary conditions +{:}'.format(np.mean(boundary_conditions)))
         plt.colorbar()
         plt.show()
-        '''
+        '''        
         
         x = boundary_conditions
         #x[1:-1,1:-1] = self.source_potentials
         x[1:-1,1:-1] = self.potentials
+           
+        '''
+        plt.figure()
+        plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
+        plt.title('boundary conditions w/ new core')
+        plt.colorbar()
+        plt.show()
+        '''        
+        
         '''
         better choice than random initial state needs to be found!
-        could use pre-conditioning with coarse grid, which is initialised
-        with
+        could use pre-conditioning with coarse grid.
         '''
         x = self.SOR_sub_func(max_iter,x,
                               np.array([self.Nsx,self.Nsy],dtype=np.int64),
@@ -882,8 +896,7 @@ class System:
         x[1:-1,1:-1] = self.potentials     
         '''
         better choice than random initial state needs to be found!
-        could use pre-conditioning with coarse grid, which is initialised
-        with
+        could use pre-conditioning with coarse grid.
         '''
         x,all_potentials = self.SOR_sub_func_anim(max_iter,x,
                                                   np.array([self.Nsx,self.Nsy],
@@ -1146,6 +1159,7 @@ class System:
         AMR_system.show(title='AMR solved')
         plt.figure()
         plt.title('AMR test')
+         
         ax = plt.gca()
         ax.set_xlim(0,1)
         ax.set_ylim(0,1)
@@ -1157,6 +1171,7 @@ class System:
                           upper_right_coords[0],
                           lower_left_coords[1],
                           upper_right_coords[1]),alpha=0.6)
+                               
         
         
 if __name__ == '__main__': 
