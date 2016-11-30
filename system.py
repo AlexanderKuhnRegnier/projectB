@@ -35,6 +35,7 @@ from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
+from scipy import sparse
 # np.set_printoptions(threshold=np.inf)
 
 class Shape:
@@ -665,13 +666,13 @@ class System:
             plt.title(title)
         plt.show()
     def create_method_matrix(self):
-        N = self.Nsx**2
-        self.A = np.zeros((N, N))
+        N = self.Nsx*self.Nsy   #works for rectangular setup as well
+        self.A = (sparse.eye(N,format='csr')*-4)    #fill in diagonal
         boundary_conditions = []
         for i in range(N):
             boundaries_row = []
-            coord1 = int(float(i)/self.Nsx)
-            coord2 = i%self.Nsx
+            coord1 = int(float(i)/self.Nsx) #which row
+            coord2 = i%self.Nsx             #which column
             self.A[i,i] = -4
             for c1,c2 in zip([coord1,coord1,coord1-1,coord1+1],
                              [coord2-1,coord2+1,coord2,coord2]):
@@ -832,7 +833,7 @@ class System:
                               np.array([self.Nsx,self.Nsy],dtype=np.int64),
                               sources,w,tol,verbose)
         self.potentials = x[1:-1,1:-1]
-        
+
     @staticmethod
     @jit(nopython=True,cache=True)
     def SOR_sub_func(max_iter,x,Ns,sources,w,tol,verbose):
@@ -874,6 +875,112 @@ class System:
             
             if diff < tol:
                 break  
+        return x
+
+    def SOR_single(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True,
+            boundary_conditions=None):
+        '''
+        A = L + D + U
+        A x = b - b are the boundary conditions
+
+        x is arranged like:
+            u_1,1
+            u_1,2
+            u_2,1
+            u_2,2
+
+        D is of length N^2, every element is -4, N is the number of gridpoints
+        '''
+        self.tol = tol
+        self.w = w
+        w = float(w)
+        sources = self.sources
+        '''
+        Create array to contain the potential, including a boundary -
+        the boundary conditions, which are never altered during the program's
+        execution.
+        Then 'fill in' the potential at the center of this matrix
+        
+        Initialising the potentials with 0s is not really necessary, since 
+        this is done at instance creation anyway, plus this overwrites 
+        later changes to the potential with preconditioning, for example
+        '''
+        
+        if boundary_conditions is None:
+            print('no boundary conditions!')
+            boundary_conditions = np.zeros((self.Nsx+2,self.Nsy+2))
+        assert boundary_conditions.shape == (self.Nsx+2,self.Nsy+2),(
+                'The array should have shape (Nsx+2,Nsy+2)')   
+        
+        '''
+        print('boundary conditions\n',boundary_conditions)        
+        
+        plt.figure()
+        plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
+        plt.title('boundary conditions +{:}'.format(np.mean(boundary_conditions)))
+        plt.colorbar()
+        plt.show()
+        '''        
+        
+        x = boundary_conditions
+        #x[1:-1,1:-1] = self.source_potentials
+        x[1:-1,1:-1] = self.potentials
+           
+        '''
+        plt.figure()
+        plt.imshow(boundary_conditions.T,origin='lower',interpolation='none')
+        plt.title('boundary conditions w/ new core')
+        plt.colorbar()
+        plt.show()
+        '''        
+        
+        '''
+        better choice than random initial state needs to be found!
+        could use pre-conditioning with coarse grid.
+        '''
+        for iteration in range(max_iter):
+            x = self.SOR_sub_func_single_iter(max_iter,x,
+                                  np.array([self.Nsx,self.Nsy],dtype=np.int64),
+                                  sources,w,tol,verbose)
+            norm = np.linalg.norm(x)
+            norm = np.linalg.norm(x)
+        self.potentials = x[1:-1,1:-1]
+
+    @staticmethod
+    @jit(nopython=True,cache=True)
+    def SOR_sub_func_single_iter(max_iter,x,Ns,sources,w,tol,verbose):
+        w_1 = (1.-w)
+        w_4 = (w/(4.))
+#        initial_norm = np.linalg.norm(x)
+        for i in range(0,Ns[0]):
+            i_1 = i+1
+            for j in range(0,Ns[1]):
+                j_1 = j+1
+                if sources[i,j]:
+                    continue
+                '''
+                Need:
+                    i_1
+                    i_1-1 -> i
+                    i_1+1
+                    j_1
+                    j_1-1 -> j
+                    j_1+1
+                combinations:
+                    i_1,j_1+1
+                    i_1,j_1-1
+                    i_1+1,j_1
+                    i_1-1,j_1
+                    these are transformed as above (needs fewer operations)
+                '''
+                x[i_1,j_1] = w_1*x[i_1,j_1] + w_4 *(x[i_1,j_1+1]+
+                                                    x[i_1,j]+
+                                                    x[i_1+1,j_1]+
+                                                    x[i,j_1])
+
+#        final_norm = np.linalg.norm(x)
+#        diff = np.abs(initial_norm-final_norm)
+
         return x
 
     def SOR_anim(self, w=1.5, tol=1e-3, max_iter=5000, verbose=True):
@@ -947,7 +1054,12 @@ class System:
             if diff < tol:
                 break              
         return x,all_potentials[:iteration+1,...]                   
-        
+
+    def stretch_grid(self):
+        '''
+        Variable mesh sizing along the rows and column in order to 
+        increase resolution locally around a specific point
+        '''
         
 if __name__ == '__main__': 
     Ns = 81
