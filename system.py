@@ -665,44 +665,54 @@ class System:
         if title:
             plt.title(title)
         plt.show()
+
     def create_method_matrix(self):
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
+        indices = np.arange(0,N,dtype=np.int64)
         self.A = (sparse.eye(N,format='csr')*-4)    #fill in diagonal
-        for i in range(N):
-            coord1 = int(float(i)/self.Nsy) #which row
-            coord2 = i%self.Nsy             #which column
-            '''
-            row has decreased
-            column cannot have changed (still coord2), so move
-            by -Nsy along row or matrix A (to get to previous new row)
-            '''
-            if coord1-1 >= 0:
-                self.A[i,i-self.Nsy] = 1
-            '''
-            Increase row, move by +Nsy
-            '''
-            if coord1+1 < (self.Nsx):
-                self.A[i,i+self.Nsy] = 1
-            '''
-            Change column now, so move by -1 along row of matrix A to
-            adjacent cell
-            '''
-            if coord2-1 >= 0:
-                self.A[i,i-1]=1
-            '''
-            Move to next adjacent cell, now in + direction
-            '''
-            if coord2+1 < (self.Nsy):
-                self.A[i,i+1]=1
-
+        coord1 = np.array((np.arange(0,N,dtype=np.float64)/self.Nsy),
+                          dtype=np.int64) #which row
+        coord2 = indices%self.Nsy   #which column
+        '''
+        row has decreased
+        column cannot have changed (still coord2), so move
+        by -Nsy along row or matrix A (to get to previous new row)
+        '''
+        mask = (coord1-1) >= 0
+        row_indices = indices[mask]
+        column_indices = indices[mask]-self.Nsy
+        self.A[tuple(row_indices),tuple(column_indices)] = 1
+        '''
+        Increase row, move by +Nsy
+        '''
+        mask = (coord1+1) < (self.Nsx)
+        row_indices = indices[mask]
+        column_indices = indices[mask]+self.Nsy
+        self.A[tuple(row_indices),tuple(column_indices)] = 1
+        '''
+        Change column now, so move by -1 along row of matrix A to
+        adjacent cell
+        '''
+        mask = (coord2-1) >= 0
+        row_indices = indices[mask]
+        column_indices = indices[mask]-1
+        self.A[tuple(row_indices),tuple(column_indices)] = 1      
+        '''
+        Move to next adjacent cell, now in + direction
+        '''
+        mask = (coord2+1) < (self.Nsy)
+        row_indices = indices[mask]
+        column_indices = indices[mask]+1
+        self.A[tuple(row_indices),tuple(column_indices)] = 1               
+                
     def jacobi(self, tol=1e-2, max_iter=5000, verbose=True):
 #        N = self.Nsx**2
         self.create_method_matrix()
 #        b = np.zeros(N)
         #get diagonal, D
-        D = sparse.diags(self.A.diagonal())
-        L = sparse.tril(self.A,k=-1)
-        U = sparse.triu(self.A,k=1)
+        D = sparse.diags(self.A.diagonal(),format='csr')
+        L = sparse.tril(self.A,k=-1,format='csr')
+        U = sparse.triu(self.A,k=1,format='csr')
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
@@ -731,9 +741,9 @@ class System:
         self.create_method_matrix()
 #        b = np.zeros(N)
         #get diagonal, D
-        D = sparse.diags(self.A.diagonal())
-        L = sparse.tril(self.A,k=-1)
-        U = sparse.triu(self.A,k=1)
+        D = sparse.diags(self.A.diagonal(),format='csr')
+        L = sparse.tril(self.A,k=-1,format='csr')
+        U = sparse.triu(self.A,k=1,format='csr')
         L_D_inv = sparse.linalg.inv(L+D)
 #        L_D_inv_b = np.dot(L_D_inv,b)
         T = -L_D_inv.dot(U)
@@ -1048,7 +1058,7 @@ class System:
         '''
         
 if __name__ == '__main__': 
-    Ns = (60,80)
+    Ns = 150
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1067,9 +1077,9 @@ if __name__ == '__main__':
     tol = 1e-6
     max_iter = 100
     show = False
-#    test.create_method_matrix()
+
 #    test.jacobi()    
-    test.gauss_seidel()
+    test.gauss_seidel(max_iter=200)
 #    print(test.A.todense())
     test.show()    
     '''
