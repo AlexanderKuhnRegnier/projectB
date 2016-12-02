@@ -36,7 +36,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
 from scipy import sparse
-# np.set_printoptions(threshold=np.inf)
+np.set_printoptions(threshold=np.inf)
 
 class Shape:
     def __init__(self,Ns,potential,origin,*args,**kwargs):
@@ -668,45 +668,42 @@ class System:
     def create_method_matrix(self):
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
         self.A = (sparse.eye(N,format='csr')*-4)    #fill in diagonal
-        boundary_conditions = []
         for i in range(N):
-            boundaries_row = []
             coord1 = int(float(i)/self.Nsx) #which row
-            coord2 = i%self.Nsx             #which column
-            self.A[i,i] = -4
-            for c1,c2 in zip([coord1,coord1,coord1-1,coord1+1],
-                             [coord2-1,coord2+1,coord2,coord2]):
-                try:
-                    if c1==-1 or c2==-1 or c1>self.Nsx-1 or c2>self.Nsx-1:
-                        raise IndexError
-                    elif c1 == coord1-1:
-                        '''
-                        row has changed, need to move 'cell'
-                        column cannot have changed, so move
-                        by Ns along row
-                        '''
-                        self.A[i,i-self.Nsx] = 1
-                    elif c1 == coord1+1:
-                        self.A[i,i+self.Nsx] = 1
-                    elif c2 == coord2-1:
-                        self.A[i,i-1]=1
-                    elif c2 == coord2+1:
-                        self.A[i,i+1]=1
-                    else:
-                        print("error",c1,c2)
-                except IndexError:
-                    boundaries_row.append((c1,c2))
-            boundary_conditions.append(boundaries_row)
-        self.boundary_conditions = boundary_conditions
-    def jacobi(self, tol=1e-3, max_iter=5000, verbose=True):
+            coord2 = i%self.Nsy             #which column
+            '''
+            row has decreased
+            column cannot have changed (still coord2), so move
+            by -Nsy along row or matrix A (to get to previous new row)
+            '''
+            if coord1-1 >= 0:
+                self.A[i,i-self.Nsy] = 1
+            '''
+            Increase row, move by +Nsy
+            '''
+            if coord1+1 < (self.Nsx):
+                self.A[i,i+self.Nsy] = 1
+            '''
+            Change column now, so move by -1 along row of matrix A to
+            adjacent cell
+            '''
+            if coord2-1 >= 0:
+                self.A[i,i-1]=1
+            '''
+            Move to next adjacent cell, now in + direction
+            '''
+            if coord2+1 < (self.Nsy):
+                self.A[i,i+1]=1
+
+    def jacobi(self, tol=1e-2, max_iter=5000, verbose=True):
         assert self.Nsx == self.Nsy,'Jacobi method requires a square grid'
-        N = self.Nsx**2
+#        N = self.Nsx**2
         self.create_method_matrix()
-        b = np.zeros(N)
+#        b = np.zeros(N)
         #get diagonal, D
-        D = np.diag(np.diag(self.A)) #but these are all just -4
-        L = np.tril(self.A,k=-1)
-        U = np.triu(self.A,k=1)
+        D = sparse.diags(self.A.diagonal())
+        L = sparse.tril(self.A,k=-1)
+        U = sparse.triu(self.A,k=1)
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
@@ -714,36 +711,34 @@ class System:
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]    
         #randomise starting potential
-        D_inv = np.linalg.inv(D)
+        D_inv = sparse.linalg.inv(D)
         L_U = L+U
-        T = - np.dot(D_inv, L_U)
-        D_inv_b = np.dot(D_inv, b).reshape(-1,)
+        T = - D_inv.dot(L_U)
+#        D_inv_b = D_inv.dot(b).reshape(-1,) #just 0s anyway
         print("Jacobi: finished creating matrices")
         for i in range(max_iter):
-            initial_norm = np.linalg.norm(x)
-            x = np.dot(T,x).reshape(-1,) + D_inv_b
+            x = T.dot(x).reshape(-1,) # + D_inv_b all 0s
             x[sources] = orig_x[sources]
-            final_norm = np.linalg.norm(x)
-            diff = np.abs(initial_norm-final_norm)
+            error = np.mean(np.abs(self.A.dot(x)))  #similar computational
+                                                    #effort as 2xnorm
             if verbose:
-                print("i,diff:",i,diff)
-            if diff < tol:
+                print("i, error:",i,error)
+            if error < tol:
                 break
         self.potentials = x.reshape(self.Nsx,-1)
-    def gauss_seidel(self, tol=1e-3, max_iter=5000, verbose=True):
+    def gauss_seidel(self, tol=1e-2, max_iter=5000, verbose=True):
         assert self.Nsx == self.Nsy,'Gauss Seidel method requires a square grid'        
-        N = self.Nsx**2
+#        N = self.Nsx**2
         #create array (matrix) A
         self.create_method_matrix()
-        b = np.zeros(N)
-
+#        b = np.zeros(N)
         #get diagonal, D
-        D = np.diag(np.diag(self.A)) #but these are all just -4
-        L = np.tril(self.A,k=-1)
-        U = np.triu(self.A,k=1)
-        L_D_inv = np.linalg.inv(L+D)
-        L_D_inv_b = np.dot(L_D_inv,b)
-        T = -np.dot(L_D_inv,U)
+        D = sparse.diags(self.A.diagonal())
+        L = sparse.tril(self.A,k=-1)
+        U = sparse.triu(self.A,k=1)
+        L_D_inv = sparse.linalg.inv(L+D)
+#        L_D_inv_b = np.dot(L_D_inv,b)
+        T = -L_D_inv.dot(U)
         print("Gauss Seidel: finished creating matrices")
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
@@ -752,21 +747,14 @@ class System:
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]    
         #randomise starting potential
-
         for i in range(max_iter):
-            #print "before\n",x.reshape(self.Nsx,-1)
-            initial_norm = np.linalg.norm(x)
-            x = np.dot(T,x).reshape(-1,) + L_D_inv_b
+            x = T.dot(x).reshape(-1,) # + L_D_inv_b
             x[sources] = orig_x[sources]
-            #print "sources",x[sources]
-            final_norm = np.linalg.norm(x)
-            diff = np.abs(initial_norm-final_norm)
-            #print "after\n",x.reshape(self.Nsx,-1)
+            error = np.mean(np.abs(self.A.dot(x)))            
             if verbose:
-                print("i,diff:",i,diff)
-            if diff < tol:
+                print("i, error:",i,error)
+            if error < tol:
                 break
-            #print ''
         self.potentials = x.reshape(self.Nsx, -1)
     def SOR(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True,
             boundary_conditions=None):
@@ -1062,7 +1050,7 @@ class System:
         '''
         
 if __name__ == '__main__': 
-    Ns = 81
+    Ns = 40
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1076,11 +1064,17 @@ if __name__ == '__main__':
 #    test.add(Shape(Ns,1,(0.3,0.5),0.01,0.5))
 #    test.add(Shape(Ns,-1,(0.7,0.5),0.01,0.5))
     test.add(Shape(Ns,1,(0.5,0.5),0.4))
-    test.show_setup()
-    calc = True
+#    test.show_setup()
+    calc = False
     tol = 1e-6
     max_iter = 100
     show = False
+#    test.create_method_matrix()
+#    test.jacobi()    
+    test.gauss_seidel()
+#    print(test.A.todense())
+    test.show()    
+    '''
     #methods = [test.SOR,test.jacobi,test.gauss_seidel]
     methods = [test.SOR]
     names = [f.__name__ for f in methods]
@@ -1091,3 +1085,4 @@ if __name__ == '__main__':
             if show:
                 test.show(title=name,interpolation='none',every=7)
                 test.streamplot()
+    '''
