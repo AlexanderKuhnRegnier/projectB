@@ -669,7 +669,7 @@ class System:
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
         self.A = (sparse.eye(N,format='csr')*-4)    #fill in diagonal
         for i in range(N):
-            coord1 = int(float(i)/self.Nsx) #which row
+            coord1 = int(float(i)/self.Nsy) #which row
             coord2 = i%self.Nsy             #which column
             '''
             row has decreased
@@ -696,7 +696,6 @@ class System:
                 self.A[i,i+1]=1
 
     def jacobi(self, tol=1e-2, max_iter=5000, verbose=True):
-        assert self.Nsx == self.Nsy,'Jacobi method requires a square grid'
 #        N = self.Nsx**2
         self.create_method_matrix()
 #        b = np.zeros(N)
@@ -726,8 +725,7 @@ class System:
             if error < tol:
                 break
         self.potentials = x.reshape(self.Nsx,-1)
-    def gauss_seidel(self, tol=1e-2, max_iter=5000, verbose=True):
-        assert self.Nsx == self.Nsy,'Gauss Seidel method requires a square grid'        
+    def gauss_seidel(self, tol=1e-5, max_iter=5000, verbose=True):
 #        N = self.Nsx**2
         #create array (matrix) A
         self.create_method_matrix()
@@ -1050,7 +1048,7 @@ class System:
         '''
         
 if __name__ == '__main__': 
-    Ns = 40
+    Ns = (60,80)
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1063,7 +1061,7 @@ if __name__ == '__main__':
     '''
 #    test.add(Shape(Ns,1,(0.3,0.5),0.01,0.5))
 #    test.add(Shape(Ns,-1,(0.7,0.5),0.01,0.5))
-    test.add(Shape(Ns,1,(0.5,0.5),0.4))
+    test.add(Shape(Ns,1,(0.5,0.5),0.2))
 #    test.show_setup()
     calc = False
     tol = 1e-6
