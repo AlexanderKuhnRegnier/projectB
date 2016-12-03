@@ -9,5 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
 from scipy import sparse
+from time import clock
 # np.set_printoptions(threshold=np.inf)
 
+class Grid:
+    def __init__(self,)
