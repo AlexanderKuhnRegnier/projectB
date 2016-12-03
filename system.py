@@ -669,7 +669,7 @@ class System:
     def create_method_matrix(self):
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
         indices = np.arange(0,N,dtype=np.int64)
-        self.A = (sparse.eye(N,format='csr')*-4)    #fill in diagonal
+        self.A = (sparse.eye(N,format='lil')*-4)    #fill in diagonal
         coord1 = np.array((np.arange(0,N,dtype=np.float64)/self.Nsy),
                           dtype=np.int64) #which row
         coord2 = indices%self.Nsy   #which column
@@ -703,7 +703,8 @@ class System:
         mask = (coord2+1) < (self.Nsy)
         row_indices = indices[mask]
         column_indices = indices[mask]+1
-        self.A[tuple(row_indices),tuple(column_indices)] = 1               
+        self.A[tuple(row_indices),tuple(column_indices)] = 1      
+        self.A = self.A.tocsr()
                 
     def jacobi(self, tol=1e-2, max_iter=5000, verbose=True):
 #        N = self.Nsx**2
@@ -891,6 +892,8 @@ class System:
         self.w = w
         w = float(w)
         sources = self.sources
+        if not hasattr(self,'A'):
+            self.create_method_matrix()
         '''
         Create array to contain the potential, including a boundary -
         the boundary conditions, which are never altered during the program's
@@ -937,14 +940,17 @@ class System:
         for iteration in range(max_iter):
             x = self.SOR_sub_func_single_iter(max_iter,x,
                                   np.array([self.Nsx,self.Nsy],dtype=np.int64),
-                                  sources,w,tol,verbose)
-            norm = np.linalg.norm(x)
-            norm = np.linalg.norm(x)
+                                  sources,w)
+            error = np.mean(np.abs(self.A.dot(x)))
+            if verbose:
+                print("i, error:",iteration,error)
+            if error < tol:
+                break            
         self.potentials = x[1:-1,1:-1]
 
     @staticmethod
     @jit(nopython=True,cache=True)
-    def SOR_sub_func_single_iter(max_iter,x,Ns,sources,w,tol,verbose):
+    def SOR_sub_func_single_iter(max_iter,x,Ns,sources,w):
         w_1 = (1.-w)
         w_4 = (w/(4.))
 #        initial_norm = np.linalg.norm(x)
@@ -1058,7 +1064,7 @@ class System:
         '''
         
 if __name__ == '__main__': 
-    Ns = 150
+    Ns = 50
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
