@@ -36,6 +36,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
 from scipy import sparse
+import time
 np.set_printoptions(threshold=np.inf)
 
 class Shape:
@@ -875,7 +876,7 @@ class System:
         return x
 
     def SOR_single(self, w=1.2, tol=1e-3, max_iter=5000, verbose=True,
-            boundary_conditions=None):
+            boundary_conditions=None, max_time=600):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -937,15 +938,18 @@ class System:
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid.
         '''
+        start = time.clock()
         for iteration in range(max_iter):
             x = self.SOR_sub_func_single_iter(max_iter,x,
                                   np.array([self.Nsx,self.Nsy],dtype=np.int64),
                                   sources,w)
-            error = np.mean(np.abs(self.A.dot(x)))
+            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,))))
             if verbose:
                 print("i, error:",iteration,error)
             if error < tol:
-                break            
+                break    
+            if (time.clock()-start) > max_time:
+                break
         self.potentials = x[1:-1,1:-1]
 
     @staticmethod
@@ -1064,7 +1068,7 @@ class System:
         '''
         
 if __name__ == '__main__': 
-    Ns = 50
+    Ns = 500
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1085,7 +1089,7 @@ if __name__ == '__main__':
     show = False
 
 #    test.jacobi()    
-    test.gauss_seidel(max_iter=200)
+    test.SOR_single(max_iter=20000,tol=1e-12,max_time=5)
 #    print(test.A.todense())
     test.show()    
     '''
