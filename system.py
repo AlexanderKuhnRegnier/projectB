@@ -36,8 +36,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import jit
 from scipy import sparse
-import time
-np.set_printoptions(threshold=np.inf)
+from time import clock
+#np.set_printoptions(threshold=np.inf)
 
 class Shape:
     def __init__(self,Ns,potential,origin,*args,**kwargs):
@@ -705,16 +705,16 @@ class System:
         row_indices = indices[mask]
         column_indices = indices[mask]+1
         self.A[tuple(row_indices),tuple(column_indices)] = 1      
-        self.A = self.A.tocsr()
+        self.A = self.A.tocsc()
                 
     def jacobi(self, tol=1e-2, max_iter=5000, verbose=True):
 #        N = self.Nsx**2
         self.create_method_matrix()
 #        b = np.zeros(N)
         #get diagonal, D
-        D = sparse.diags(self.A.diagonal(),format='csr')
-        L = sparse.tril(self.A,k=-1,format='csr')
-        U = sparse.triu(self.A,k=1,format='csr')
+        D = sparse.diags(self.A.diagonal(),format='csc')
+        L = sparse.tril(self.A,k=-1,format='csc')
+        U = sparse.triu(self.A,k=1,format='csc')
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
@@ -743,9 +743,9 @@ class System:
         self.create_method_matrix()
 #        b = np.zeros(N)
         #get diagonal, D
-        D = sparse.diags(self.A.diagonal(),format='csr')
-        L = sparse.tril(self.A,k=-1,format='csr')
-        U = sparse.triu(self.A,k=1,format='csr')
+        D = sparse.diags(self.A.diagonal(),format='csc')
+        L = sparse.tril(self.A,k=-1,format='csc')
+        U = sparse.triu(self.A,k=1,format='csc')
         L_D_inv = sparse.linalg.inv(L+D)
 #        L_D_inv_b = np.dot(L_D_inv,b)
         T = -L_D_inv.dot(U)
@@ -938,7 +938,7 @@ class System:
         better choice than random initial state needs to be found!
         could use pre-conditioning with coarse grid.
         '''
-        start = time.clock()
+        start = clock()
         for iteration in range(max_iter):
             x = self.SOR_sub_func_single_iter(max_iter,x,
                                   np.array([self.Nsx,self.Nsy],dtype=np.int64),
@@ -948,7 +948,7 @@ class System:
                 print("i, error:",iteration,error)
             if error < tol:
                 break    
-            if (time.clock()-start) > max_time:
+            if (clock()-start) > max_time:
                 break
         self.potentials = x[1:-1,1:-1]
 
@@ -1060,15 +1060,9 @@ class System:
             if diff < tol:
                 break              
         return x,all_potentials[:iteration+1,...]                   
-
-    def stretch_grid(self):
-        '''
-        Variable mesh sizing along the rows and column in order to 
-        increase resolution locally around a specific point
-        '''
         
 if __name__ == '__main__': 
-    Ns = 500
+    Ns = 100
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1087,10 +1081,12 @@ if __name__ == '__main__':
     tol = 1e-6
     max_iter = 100
     show = False
-
+    start = clock()
 #    test.jacobi()    
-    test.SOR_single(max_iter=20000,tol=1e-12,max_time=5)
+#    test.SOR_single(max_iter=0,tol=1e-12,max_time=5)
+    test.jacobi(max_iter=2000,tol=1e-12)
 #    print(test.A.todense())
+    print('time:',clock()-start)
     test.show()    
     '''
     #methods = [test.SOR,test.jacobi,test.gauss_seidel]
