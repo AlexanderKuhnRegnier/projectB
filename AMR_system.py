@@ -15,6 +15,72 @@ from matplotlib.collections import LineCollection
 plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
                                         #better than jet
 
+
+def gradient(data,*args):
+    '''
+    Data:
+        data where gradient is to be taken, assume data has shape 
+        (N1,) for 1D, (N1,N2) for 2D, (N1,N2,N3) for 3D and so on...
+    args:
+        Can optionally supply grid spacings. Grid spacings should have length
+        Ni-1, where i refers to the dimension (axis) of interest.
+        If no args are given, a uniform grid spacing of 1 is assumed.
+        Either one can supply 1 additional argument, which will be taken
+        for all axes, otherwise an array of grid spacings must be 
+        supplied for every axis.
+    Second order accurate central differences are taken every where but 
+    at the edges, where first order accurate forward or backward differences
+    are calculated, based on the location.
+    '''
+    D = data.ndim
+    gradients = []
+    n = len(args)
+    if n == D:
+        spacings = list(args)
+    elif n == 1:
+        #only works if square, will throw error otherwise!
+        spacings = list(args)*D
+    else:
+        spacings = [np.array([1.0]*(N-1)) for N in data.shape]
+    for i in range(D):
+        spacings[i] = np.asarray(spacings[i],dtype=np.float64)
+    select1 = [slice(None)]*D
+    select2 = [slice(None)]*D
+    select3 = [slice(None)]*D
+    spacing_reshape = [None]*D
+    for m in range(D):
+        gradient = np.empty_like(data,dtype=np.float64)    
+        spacing_reshape[m] = slice(None) 
+#        Take central differences, therefore exclude last along axis
+#        and first along axis
+        select1[m] = slice(1,-1) #select central values along axis
+        select2[m] = slice(2,None) #select last values along axis
+        select3[m] = slice(None,-2) #select first values along axis
+#        print('m',m)
+#        print(select1,'\n',select2,'\n',select3)
+#        print(data[select1],'\n',data[select2],'\n',data[select3],'\n',spacings[m])
+        gradient[select1] = (((data[select2] - data[select1])/
+                                spacings[m][1:][spacing_reshape]
+                        +(data[select1] - data[select3])/
+                            spacings[m][:-1][spacing_reshape])
+                            /2.)
+#        now do the forward difference
+        select1[m] = 0 #forward difference will fill in values here
+        select2[m] = 1 #these values are used in the gradient calculation
+        gradient[select1] = (data[select2] - data[select1])/spacings[m][0]
+#        now do the backward difference
+        select1[m] = -1 #where to put gradients
+        select2[m] = -2 #used to calculate backwards difference
+        gradient[select1] = (data[select1] - data[select2])/spacings[m][-1]
+
+#        reset the selection objects for the next axis
+        select1 = [slice(None)]*D
+        select2 = [slice(None)]*D
+        select3 = [slice(None)]*D        
+        spacing_reshape = [None]*D
+        gradients.append(gradient)
+    return gradients
+        
 class Grid:
     '''
     Variable mesh sizing along the rows and column in order to 
@@ -379,6 +445,7 @@ class AMR_system:
     def show_setup(self):
         self.grid.show()
     
+
 xh = np.ones(100)
 xh[12:45]=0.1
 yh = np.ones(50)
