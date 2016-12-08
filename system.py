@@ -617,7 +617,8 @@ class System:
         plt.figure()
         plt.title('Sources')
         plt.imshow(self.source_potentials.T,origin='lower',
-                   interpolation='none',**fargs)
+                   interpolation=interpolation,cmap=plt.get_cmap('viridis'),
+                   **fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -645,7 +646,8 @@ class System:
         '''
         plt.figure()
         plt.title('Potential')
-        plt.imshow(self.potentials.T,origin='lower',interpolation='none',
+        plt.imshow(self.potentials.T,origin='lower',
+                   interpolation=interpolation,cmap=plt.get_cmap('viridis'),
                    **fargs)
         plt.colorbar()
         if quiver:
@@ -677,7 +679,7 @@ class System:
         '''
         row has decreased
         column cannot have changed (still coord2), so move
-        by -Nsy along row or matrix A (to get to previous new row)
+        by -Nsy along row of matrix A (to get to previous new row)
         '''
         mask = (coord1-1) >= 0
         row_indices = indices[mask]
@@ -718,6 +720,7 @@ class System:
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
+        inv_sources = ~sources
         #randomise starting potential
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]    
@@ -730,8 +733,8 @@ class System:
         for i in range(max_iter):
             x = T.dot(x).reshape(-1,) # + D_inv_b all 0s
             x[sources] = orig_x[sources]
-            error = np.mean(np.abs(self.A.dot(x)))  #similar computational
-                                                    #effort as 2xnorm
+            error = np.mean(np.abs(self.A.dot(x))[inv_sources])
+            #similar computational effort as 2xnorm
             if verbose:
                 print("i, error:",i,error)
             if error < tol:
@@ -753,6 +756,7 @@ class System:
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
+        inv_sources = ~sources
         #randomise starting potential
         x = np.random.random(x.shape)
         x[sources] = orig_x[sources]    
@@ -760,7 +764,7 @@ class System:
         for i in range(max_iter):
             x = T.dot(x).reshape(-1,) # + L_D_inv_b
             x[sources] = orig_x[sources]
-            error = np.mean(np.abs(self.A.dot(x)))            
+            error = np.mean(np.abs(self.A.dot(x))[inv_sources])   
             if verbose:
                 print("i, error:",i,error)
             if error < tol:
@@ -893,6 +897,7 @@ class System:
         self.w = w
         w = float(w)
         sources = self.sources
+        inv_source_mask = ~(sources.reshape(-1,1))
         if not hasattr(self,'A'):
             self.create_method_matrix()
         '''
@@ -943,7 +948,8 @@ class System:
             x = self.SOR_sub_func_single_iter(max_iter,x,
                                   np.array([self.Nsx,self.Nsy],dtype=np.int64),
                                   sources,w)
-            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,))))
+            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+                                                     )[inv_source_mask])
             if verbose:
                 print("i, error:",iteration,error)
             if error < tol:

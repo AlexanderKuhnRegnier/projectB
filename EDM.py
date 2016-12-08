@@ -50,7 +50,8 @@ def create_EDM_system(Ns,kx,ky=None):
     return system
     
 if __name__ == '__main__':
-    test = create_EDM_system(500,1)
+    factor = 150
+    test = create_EDM_system((26*factor,3*factor),0.9)
     test.show_setup()
-    test.SOR_single(w=1.2,tol=1e-10,max_time=20)
+    test.SOR_single(w=1.5,tol=1e-10,max_time=60)
     test.show(quiver=False)
