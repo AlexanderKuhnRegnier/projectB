@@ -12,6 +12,8 @@ from scipy import sparse
 from time import clock
 from matplotlib.collections import LineCollection
 #np.set_printoptions(threshold=np.inf)
+plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
+                                        #better than jet
 
 class Grid:
     '''
@@ -43,13 +45,14 @@ class Grid:
                                        self.x_h[-1]))
         
         self.x = np.append([0.],np.cumsum(self.x_h))
+        
         y_sum = np.sum(y_h)
         self.y_h = y_h / (y_sum*(1./aspect_ratio))
         
         self.y_h_extended = np.hstack((self.y_h[0],self.y_h,
-                                       self.y_h[-1]))
-        
+                                       self.y_h[-1]))        
         self.y = np.append([0.],np.cumsum(self.y_h))
+        
         self.grid = np.meshgrid(self.x,self.y,indexing='ij')
         self.x_indices = np.arange(len(self.x))
         self.y_indices = np.arange(len(self.y))
@@ -377,14 +380,14 @@ class AMR_system:
         self.grid.show()
     
 xh = np.ones(100)
-#xh[12:45]=0.1
+xh[12:45]=0.1
 yh = np.ones(50)
-#yh[6:40]=0.1
+yh[6:40]=0.1
 test = Grid(xh,yh)
 test.filled_rectangle(1,(0.5,0.5),0.4,0.7)
 test.filled_circle(1,(0.2,0.4),0.01)
 #test.show(color=(0,0,0,0.1))
 
 system = AMR_system(test)
-system.jacobi(max_iter=1000000,max_time=15,tol=1e-10)
+system.jacobi(max_iter=1000000,max_time=5,tol=1e-10)
 system.show()

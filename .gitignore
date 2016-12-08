@@ -94,5 +94,8 @@ ENV/
 #executables
 *.exe
 
-#mobies
+#movies
 *.mp4
+
+#conda update file
+conda.cmd

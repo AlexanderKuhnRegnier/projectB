@@ -38,6 +38,8 @@ from numba import jit
 from scipy import sparse
 from time import clock
 #np.set_printoptions(threshold=np.inf)
+plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
+                                        #better than jet
 
 class Shape:
     def __init__(self,Ns,potential,origin,*args,**kwargs):
@@ -617,8 +619,7 @@ class System:
         plt.figure()
         plt.title('Sources')
         plt.imshow(self.source_potentials.T,origin='lower',
-                   interpolation=interpolation,cmap=plt.get_cmap('viridis'),
-                   **fargs)
+                   interpolation=interpolation, **fargs)
         plt.colorbar()
         plt.tight_layout()
         if title:
@@ -647,8 +648,7 @@ class System:
         plt.figure()
         plt.title('Potential')
         plt.imshow(self.potentials.T,origin='lower',
-                   interpolation=interpolation,cmap=plt.get_cmap('viridis'),
-                   **fargs)
+                   interpolation=interpolation, **fargs)
         plt.colorbar()
         if quiver:
             U,V = np.gradient(self.potentials)
