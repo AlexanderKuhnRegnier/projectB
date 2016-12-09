@@ -343,7 +343,7 @@ documentation""".format(len(args),shape))
                     self.source_potentials[i,index] = self.potential
 
 class System:
-    def __init__(self,Ns):
+    def __init__(self,Ns,size=None):
         '''
         'Ns' is the number of gridpoints along an axis, so the
         grid spacing h is the inverse of this, since the axes range from 0 to 1
@@ -357,11 +357,16 @@ class System:
         If only a single value is given for the 'Ns' argument, the grid will
         default to being a square grid with Ns gridpoints along each axis.
         '''
+        if size == None:
+            size = (1.,1.) 
+        if not hasattr(size,'__iter__'):
+            size = (size,size) 
+        self.size = size
         if hasattr(Ns,'__iter__'):
             Nsx,Nsy = Ns
         else:
             Nsx = Ns
-            Nsy = Nsx
+            Nsy = Ns
 #        assert type(Nsx)==int, 'Ns should be an integer'
 #        assert type(Nsy)==int, 'Ns should be an integer'
         self.Nsx = int(Nsx)
@@ -632,7 +637,7 @@ class System:
         U = -U.T
         V = -V.T        
         X,Y = np.meshgrid(np.arange(self.Nsx),np.arange(self.Nsy))
-        lw = 8*fields/np.max(fields)
+        lw = 8*fields.T/np.max(fields)
         plt.streamplot(X, Y, U, V,
                        density = [1,1],
                        color = self.potentials.T,
