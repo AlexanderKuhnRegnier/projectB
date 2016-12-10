@@ -11,10 +11,9 @@ from numba import jit
 from scipy import sparse
 from time import clock
 from matplotlib.collections import LineCollection
-#np.set_printoptions(threshold=np.inf)
+np.set_printoptions(threshold=np.inf)
 plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
                                         #better than jet
-
 
 def gradient(data,*args):
     '''
@@ -444,17 +443,111 @@ class AMR_system:
         fig.colorbar(plot)
     def show_setup(self):
         self.grid.show()
+        
+    def calculate_E_field(self):
+        self.E_field = gradient(self.potentials,self.x_h,self.y_h)
     
-
-xh = np.ones(100)
-xh[12:45]=0.1
-yh = np.ones(50)
-yh[6:40]=0.1
-test = Grid(xh,yh)
-test.filled_rectangle(1,(0.5,0.5),0.4,0.7)
-test.filled_circle(1,(0.2,0.4),0.01)
-#test.show(color=(0,0,0,0.1))
-
-system = AMR_system(test)
-system.jacobi(max_iter=1000000,max_time=5,tol=1e-10)
-system.show()
+def build_from_segments(Ns,x=None,y=None):
+    """
+    Create arrays containing step sizes to be used to initialise a 
+    Grid instance
+    *Ns*:
+        Number of grid points, can be a tuple (see below)
+    *x*,*y*:
+        need to be iterable, a series of parameters specifying the start,end
+        and either the grid spacing in the interval, or the number of
+        intervals therein.
+    To be used like so:
+        xh,yh = build_from_segments((100,50),
+                                    x=((end1,steps1),(end2,steps2)),
+                                    y=((end1,steps1),(end2,steps2)))
+        *end*: float
+            ranging from 0 to 1, describing position along the axis
+        *steps*: int
+            number of grid points between *start* and *end*
+            the sum of all steps must add up to the number of steps given in
+            *Ns* for each axis.
+        can then create Grid instance:
+            grid_instance = Grid(xh,yh)
+        and then use that to initialise an AMR_system instance:
+            system = AMR_system(test)
+    Instead of the above, *steps* can be replaced by a grid-spacing.
+    Thus, if one wishes to specify grid spacings, the input should be < 1
+    and of type float
+    """
+    outputs = []
+    for args in [x,y]:
+        if not args:
+            continue
+        ends,params = zip(*args)
+        starts = (0.,)+ends[:-1]
+#        print(starts,ends,params)
+        assert starts[1:] == ends[:-1],'Starts should match ends'
+        if np.all(np.array(params)>=1):
+            #assume step numbers are specified
+            starts = np.array(starts,dtype=np.float64)
+            ends = np.array(ends,dtype=np.float64)
+            steps = np.array(params,dtype=np.int64)
+            steps_cumulative = np.cumsum(steps)
+#            print('cumulative',steps_cumulative)
+            grid_spacings = (ends-starts)/steps
+#            print('stepsizes',grid_spacings)
+            h = np.zeros(np.sum(steps))
+            for i in range(steps.size):
+                if not i:
+                    start = 0
+                else:
+                    start = steps_cumulative[i-1]
+                end = steps_cumulative[i]
+                print('start end',start,end)
+                h[start:end] = grid_spacings[i]
+            outputs.append(h)
+        elif np.all(np.array(params)<1):
+#            print('spacings')
+            #assume grid spacings are specified
+            starts = np.array(starts,dtype=np.float64)
+            ends = np.array(ends,dtype=np.float64)
+            grid_spacings = np.array(params,dtype=np.float64)    
+#            print('spacings',grid_spacings)
+            steps = (ends-starts)/grid_spacings
+            int_steps = np.array(np.round(steps),dtype=np.int64)
+            assert np.sum(steps - int_steps)<1e-10,(
+                    'Grid spacings should match starts and ends!')
+            steps = int_steps
+            steps_cumulative = np.cumsum(steps)
+            grid_spacings = (ends-starts)/steps     #adjust for whole numbers
+            h = np.zeros(np.sum(steps))
+#            print('steps',steps)
+            for i in range(steps.size):
+                if not i:
+                    start = 0
+                else:
+                    start = steps_cumulative[i-1]
+                end = steps_cumulative[i]
+#                print('start end',start,end)
+                h[start:end] = grid_spacings[i]
+            outputs.append(h)            
+        else:
+            print('Non-homogeneous parameter specifications!')
+    if len(outputs)==1:
+        outputs = [outputs[0],outputs[0]]
+    return outputs
+if __name__ == '__main__':
+    Ns = (100,50)
+    
+#    xh,yh = build_from_segments(Ns,
+#                                ((0.1,0.01),(0.25,0.005),(1,0.01)),
+#                                ((0.35,0.01),(0.45,0.005),(1,0.01))
+#                               )
+    xh,yh = build_from_segments(Ns,((1,0.005),))
+    
+    test = Grid(xh,yh)
+    test.filled_rectangle(1,(0.5,0.5),0.4,0.7)
+    test.filled_rectangle(1,(0.2,0.4),0.02,0.02)
+    test.show(color=(0,0,0,0.1))
+    start = clock()
+    system = AMR_system(test)
+    print('Created matrix:',clock()-start)
+    system.jacobi(max_iter=1000000,max_time=100,tol=1e-10,verbose=False)
+    print('time:',clock()-start)
+    system.show()
