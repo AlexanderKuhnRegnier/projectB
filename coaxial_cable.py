@@ -32,11 +32,78 @@ in this case 10 V
 """
 from __future__ import print_function
 from system import Shape,System
+from AMR_system import gradient
 import numpy as np
 import matplotlib.pyplot as plt
 from time import clock
 import os
 plt.ioff()
+
+#augment original system class by adding new methods which can plot the 
+#potential and electric field across the diagonal of the system
+class Cable(System):
+    def cross_section_potential(self,side_length=0,show=True,savepath=''):
+        '''
+        now, plot a cross section of the potential across the diagonal.
+        Ideally, the number of grid points should be an ODD number for this
+        to work ideally - due to the symmetry of the problem.
+        '''
+        cross_section = np.diag(self.potentials)
+        plt.figure()
+        plt.title('1-D Cross-Section of the Potential across the Diagonal\n'
+                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
+                  format(self.tol,self.Nsx,self.Nsy,side_length))
+        grid_positions = self.grid[0][:,0]
+        plt.plot(grid_positions,cross_section,label='potential')
+        plt.xlabel('Distance from left wall (natural units)')
+        plt.ylabel('Potential (scaled V)')
+    #    plt.legend()
+        ymin,ymax = plt.ylim()
+        plt.ylim(ymax=ymax*1.1)
+        plt.tight_layout()
+        if savepath:
+            plt.savefig(savepath,bbox_inches='tight',dpi=200) 
+            plt.close('all') 
+        else:
+            if show:
+                plt.show()
+            else:
+                plt.close('all')
+        return cross_section
+ 
+    def cross_section(self,side_length=0,show=True,savepath=''):
+        '''
+        now, plot a cross section of the electric field magnitude across the 
+        diagonal. Ideally, the number of grid points should be an ODD number 
+        for this to work ideally - due to the symmetry of the problem.
+        '''
+        assert self.Nsy == self.Nsx,'Needs square grid! (uses diagonal)'
+        E_field = gradient(self.potentials,[self.h]*(self.Nsx-1))
+        E_field_mag = np.sqrt(E_field[0]**2+E_field[1]**2)
+        cross_section = np.diag(E_field_mag)
+        plt.figure()
+        plt.title('1-D Cross-Section of the Electric Field Magnitude across the Diagonal\n'
+                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
+                  format(self.tol,self.Nsx,self.Nsy,side_length))
+        grid_positions = self.grid[0][:,0]
+        plt.plot(grid_positions,cross_section,label='electric field magnitude')
+        plt.xlabel('Distance from left wall (natural units)')
+        plt.ylabel('Electric Field Magnitude (scaled)')
+    #    plt.legend()
+        ymin,ymax = plt.ylim()
+        plt.ylim(ymax=ymax*1.1)
+        plt.tight_layout()
+        if savepath:
+            plt.savefig(savepath,bbox_inches='tight',dpi=200) 
+            plt.close('all') 
+        else:
+            if show:
+                plt.show()
+            else:
+                plt.close('all')
+        return cross_section
+
+
 def name_folder(folder):
     '''
     Input: folder (string)
@@ -54,41 +121,38 @@ show - to test out shapes
 show = True
 
 if show:
-    Ns = (100,100)
+    Ns = 250
     side_length = (1/3.)
     square_coaxial_cable = Shape(Ns,5,(0.5,0.5),3e-1,side_length,shape='square',
                                  filled=True)
-    cable = System(Ns)
+    cable = Cable(Ns)
     cable.add(square_coaxial_cable)
-    start = clock()
-    cable.SOR(tol=1e-12,max_iter=5000)   
-    print('time:',clock()-start)
-    cable.show(interpolation='none')  
-
+    cable.SOR_single(tol=1e-14,max_iter=50000,max_time=100)   
+    cable.cross_section(side_length=side_length)
+    
 picture_folder = name_folder(os.path.join(os.getcwd(),'potential_cross_sections'))            
 #import time
 #start = time.clock()
-Ns = 50
+Ns = 300
 #print('time: {:.3f}'.format(time.clock()-start))
 #cable.show_setup(interpolation='none')
-tol = 1e-8
+tol = 1e-10
 max_iter = 500000
-
+max_time = 100
 solve = False
 
-steps = 10
+side_lengths = np.linspace(1e-1,9e-1,10)
 
 if solve:
     os.mkdir(picture_folder)
-    for i,side_length in enumerate(np.linspace(4e-1,5.3e-1,steps)):
+    for i,side_length in enumerate(side_lengths):
         square_coaxial_cable = Shape(Ns,1,(0.5,0.5),side_length,shape='square')
-        cable = System(Ns)
+        cable = Cable(Ns)
         cable.add(square_coaxial_cable)    
         '''
         solve the system
         '''
-        cable.SOR(tol=tol,max_iter=max_iter)
-    #    cable.show(title='Square Coaxial Cable, SOR',interpolation='none')
+        cable.SOR_single(tol=tol,max_iter=max_iter,max_time=max_time)
         '''
         now, plot a cross section of the potential across the central row.
         Ideally, the number of grid points should be an ODD number for this

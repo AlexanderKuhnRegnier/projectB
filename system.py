@@ -37,6 +37,7 @@ import matplotlib.pyplot as plt
 from numba import jit
 from scipy import sparse
 from time import clock
+from AMR_system import gradient
 #np.set_printoptions(threshold=np.inf)
 plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
                                         #better than jet
@@ -585,36 +586,7 @@ class System:
         
 #        self.show(every=10,quiver=False)
 #        preconditioning_system.show(title='preconditioning system',quiver=False)
-    
-    def cross_section(self,side_length=0,show=True,savepath=''):
-        '''
-        now, plot a cross section of the potential across the central row.
-        Ideally, the number of grid points should be an ODD number for this
-        to work ideally - due to the symmetry of the problem
-        '''
-        mid_row_index = int((self.Nsx-1)/2.)
-        cross_section = self.potentials[mid_row_index]
-        plt.figure()
-        plt.title('1-D Cross-Section of the Potential across the System\n'
-                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
-                  format(self.tol,self.Nsx,self.Nsy,side_length))
-        grid_positions = self.grid[0][:,0]
-        plt.plot(grid_positions,cross_section,label='potential')
-        plt.xlabel('Distance from left wall (natural units)')
-        plt.ylabel('Potential (V)')
-    #    plt.legend()
-        ymin,ymax = plt.ylim()
-        plt.ylim(ymax=ymax*1.1)
-        plt.tight_layout()
-        if savepath:
-            plt.savefig(savepath,bbox_inches='tight',dpi=200) 
-            plt.close('all') 
-        else:
-            if show:
-                plt.show()
-            else:
-                plt.close('all')
-        return cross_section
+        
     def show_setup(self,title='',interpolation='none',**fargs):
         '''
         Show the sources in the system
@@ -954,10 +926,12 @@ class System:
             error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
                                                      )[inv_source_mask])
             if verbose:
-                print("i, error:",iteration,error)
+                print("iteration, error:",iteration,error)
             if error < tol:
-                break    
+                print('Error in potential lower than tolerance')
+                break
             if (clock()-start) > max_time:
+                print('Time limit exceed')
                 break
         self.potentials = x[1:-1,1:-1]
 
