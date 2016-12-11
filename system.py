@@ -343,7 +343,7 @@ documentation""".format(len(args),shape))
                     self.source_potentials[i,index] = self.potential
 
 class System:
-    def __init__(self,Ns,size=None):
+    def __init__(self,Ns,size=(1.,1.)):
         '''
         'Ns' is the number of gridpoints along an axis, so the
         grid spacing h is the inverse of this, since the axes range from 0 to 1
@@ -356,9 +356,7 @@ class System:
         ratio between the Nsy and Nsx given.
         If only a single value is given for the 'Ns' argument, the grid will
         default to being a square grid with Ns gridpoints along each axis.
-        '''
-        if size == None:
-            size = (1.,1.) 
+        ''' 
         if not hasattr(size,'__iter__'):
             size = (size,size) 
         self.size = size
@@ -1073,7 +1071,7 @@ class System:
         return x,all_potentials[:iteration+1,...]                   
         
 if __name__ == '__main__': 
-    Ns = 40
+    Ns = 600
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1094,8 +1092,8 @@ if __name__ == '__main__':
     show = False
     start = clock()
 #    test.jacobi()    
-#    test.SOR_single(max_iter=0,tol=1e-12,max_time=5)
-    test.gauss_seidel(max_iter=3000,tol=1e-12)
+    test.SOR(max_iter=10000,tol=1e-12)
+#    test.gauss_seidel(max_iter=3000,tol=1e-12)
 #    print(test.A.todense())
     print('time:',clock()-start)
     test.show()    

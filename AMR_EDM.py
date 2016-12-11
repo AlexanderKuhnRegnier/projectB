@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from time import clock
 import os
 
-def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
-                      dust_size=1e-4,small_sources=True):
+def create_EDM_system(Ns,kx,ky=None,size=(1.,1.),dust_pos=None,
+                      dust_size=1e-1,small_sources=True):
     '''
     Create the shapes needed to model the EDM experiment and then add
     these shapes to a system, both with the given grid size.
@@ -23,8 +23,6 @@ def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
     '''
     #The grid building function takes as input the number of STEPS, which 
     #is 1 less than the number of grid points, which are specified using *Ns*
-    if size == None:
-        size = (1.,1.) 
     if not hasattr(size,'__iter__'):
         size = (size,size) 
         
@@ -35,7 +33,7 @@ def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
     #The grid building function takes as input the number of STEPS, which 
     #is 1 less than the number of grid points, which are specified using *Ns*
     xh,yh = build_from_segments(((1,Ns[0]-1),),((1,Ns[1]-1),))
-    grid = Grid(xh,yh,aspect_ratio = float(Ns[1])/Ns[0])
+    grid = Grid(xh,yh,aspect_ratio = float(Ns[1])/Ns[0],size=size)
     #compute parameters for shape creation based on padding selected using
     #*kx* and *ky* as well as the known shape ratios.
     A = Ns[1]/float(Ns[0])
@@ -59,7 +57,6 @@ def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
         grid.rectangle(-0.25,(Sx+hx,    Sy+hy/2.),   2*hx,hy)
         grid.rectangle(-0.25,(Sx+25.*hx,Sy+hy/2.),   2*hx,hy)
                      
-#    system = AMR_system(Ns,size=size)
     system = AMR_system(grid)        
 #    system.show_setup()
 #    print(system.Nsx,system.Nsy)
@@ -69,27 +66,30 @@ def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
             dust_size = (dust_size,dust_size)  
         #scale dust size by x-length, since the scaled length
         #in x is always 1, not so for y
-        dust_size = (dust_size[0]/size[0],dust_size[1]/size[0])
-        #same as system.Nsx, inverse of number of grid points
-        #along an axis
-        grid_spacing = 1./Ns[0]
-        #using the grid spacing, determine the number of 
-        #grid points covered by the dust particle
-        nr_of_points_x = int(dust_size[0]/grid_spacing)
-        nr_of_points_y = int(dust_size[1]/grid_spacing)        
+        scaled_dust_size = (dust_size[0]/size[0],dust_size[1]/size[0])
+        scaled_dust_pos = dust_pos/size[0]
         
         #determine where the dust particle will sit along the 
         #x axis based on the scaled position (assumed to be along x)
-        #and the size of the dust particle
-        lowest_x_grid = int((dust_pos/size[0] - dust_size[0]/2.)*Ns[0])    
-        highest_x_grid = lowest_x_grid+nr_of_points_x
-
+        #and the scaled size of the dust particle
+        dust_extent_x = (scaled_dust_pos-scaled_dust_size[0]/2.,
+                       scaled_dust_pos+scaled_dust_size[0]/2.)
+        lowest_x_grid,highest_x_grid = (
+            (np.abs(system.grid.x-
+                    np.array(dust_extent_x).reshape(-1,1))).argmin(axis=1))
         #lowest 'real' coordinate in scaled coordinates of the
         #top sources, which all lie along one horizontal line
         y_source = Sy+2.*hy
         #translate this to an index on the grid
-        y_source_grid = int(y_source/grid_spacing)
-        
+        #do this by taking the index of the grid point along the y axis 
+        #which is closest to *y_source* but also lower than it, since we 
+        #are looking for the point below the end of the top source
+#        print('y source pos:',y_source)
+#        print('max y:',max(system.grid.y))
+#        print(system.grid.y-y_source)
+        y_source_grid = max((i for (i,j) in enumerate(system.grid.y-y_source) 
+                             if j < 0))
+#        print('y source grid:',y_source_grid)
         #lowest position on grid of top source should be given by
         #*y_source_grid* above. If not, then no potential will be
         #assigned there, so we should start assigning at this point
@@ -97,44 +97,56 @@ def create_EDM_system(Ns,kx,ky=None,size=None,dust_pos=None,
         if np.any(system.sources[:,y_source_grid]):
             #source already assigned, so the empty space must
             #start at the grid point below this
+            #this method won't work if the sources are too close together
+            #but in that case it is irrelevant anyway
             top_dust_grid = y_source_grid-1
         else:
             top_dust_grid = y_source_grid
-                
+        bottom_dust_scaled_pos = (system.grid.y[top_dust_grid]-
+                                  scaled_dust_size[1])
+        bottom_dust_grid = (np.abs(system.grid.y-
+                                   bottom_dust_scaled_pos)).argmin()
         #grab source potential from above grid point, which makes
         #the method more general, if a 'small' potential were
         #to be investigated, for example. This would have a 
         #potential of +0.25, not +1.
         #We are only interested in placing the dust particle
         #on the top sources, since the setup is symmetric
+        
 #        print('lowest x grid',lowest_x_grid)
+#        print('top x grid',highest_x_grid)
 #        print('top dust grid',top_dust_grid)
-#        print(system.sources[lowest_x_grid,top_dust_grid+1])
+#        print('max y grid',system.grid.y.size)
+        
         assert system.sources[lowest_x_grid,top_dust_grid+1],(
                'Dust particle should be in contact with source!')
         potential = system.grid.source_potentials[lowest_x_grid,
                                                   top_dust_grid+1]
-        for x_grid in np.arange(lowest_x_grid,highest_x_grid):
-            for j in range(nr_of_points_y):
-                y_grid = top_dust_grid-j
+        for x_grid in range(lowest_x_grid,highest_x_grid+1):
+            for y_grid in range(bottom_dust_grid,top_dust_grid+1):
                 index = (x_grid,y_grid)
 #                print('index:',index)
                 system.grid.source_potentials[index] = potential
                 system.potentials[index] = potential
                 system.sources[index] = True
-        dust_tuple = (nr_of_points_x*grid_spacing*size[0],
-                      nr_of_points_y*grid_spacing*size[0])
+        dust_tuple = ((system.grid.x[highest_x_grid]-
+                       system.grid.x[lowest_x_grid])*size[0],
+                      (system.grid.y[top_dust_grid]-
+                       system.grid.y[bottom_dust_grid])*size[0])
         
     return system,dust_tuple
     
 if __name__ == '__main__':
-    factor = 100
-    k = 0.9
+    factor = 300
+    k = 1.
+    #with k=1, and a dust size of 0.1 mm (100e-6 m),
+    #the factor has to be at least 300 in order to be able to
+    #depict the dust accurately!
     test,dust_size = create_EDM_system((26*factor,3*factor),k,
                              size=(260*(1+2*k),30*(1+2*k)),
                              small_sources=True,dust_pos=350.,
-                             dust_size=2)
+                             dust_size=1e-1)
     test.show_setup()
     print('Dust Size:',dust_size)
-    test.SOR(w=1.5,tol=1e-10,max_time=60)
-    test.show(quiver=False)
+#    test.SOR(w=1.5,tol=1e-10,max_time=60)
+#    test.show(quiver=False)

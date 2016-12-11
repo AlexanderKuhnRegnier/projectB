@@ -85,14 +85,14 @@ class Grid:
     Variable mesh sizing along the rows and column in order to 
     increase resolution locally around a specific point
     '''    
-    def __init__(self,x_h,y_h,aspect_ratio=1.):
+    def __init__(self,x_h,y_h,aspect_ratio=1.,size=(1.,1.)):
         '''
         Pass in arrays containing the stepsizes along the x and y 
         direction.
         These will be scaled so that the sum of the entries in *x_h*
         is 1. The sum of the entries in *y_h* will be *aspect_ratio*.
         [aspect_ratio=1.].
-        '''
+        '''        
         assert (0 not in x_h) and (0 not in y_h),('Step sizes have to be'+
                                                   ' greater than 0!')
         x_sum = np.sum(x_h)
@@ -122,6 +122,10 @@ class Grid:
         self.x_indices = np.arange(len(self.x))
         self.y_indices = np.arange(len(self.y))
         self.source_potentials = np.zeros(self.grid[0].shape)
+        if not hasattr(size,'__iter__'):
+            self.size = (size,size) 
+        else:
+            self.size = size        
     def hollow_square(self,potential,origin,length):
         self.rectangle(potential,origin,length,length)
     def hollow_rectangle(self,potential,origin,width,height):
