@@ -240,8 +240,11 @@ class Grid:
         grid_lines = self.create_grid_line_collection(**kwargs)
         ax.add_collection(grid_lines) 
         fig.colorbar(plot)
+        plt.axis('square')
+        plt.autoscale()
+        plt.show()
         
-class AMR_system:
+class AMR_system(object):
     '''
     Variable mesh sizing along the rows and column in order to 
     increase resolution locally around a specific point
@@ -258,7 +261,36 @@ class AMR_system:
         self.Nsx = self.potentials.shape[0]
         self.Nsy = self.potentials.shape[1]
         self.create_matrix()
-        
+
+    #use properties to get the electric field and its magnitude,
+    #since the electric field would only have to be re-calculated
+    #if the potential has changed
+    def get_E_field(self):
+        if hasattr(self,'_AMR_system__past_potentials'):
+            if not np.all(self.__past_potentials == self.potentials):
+                self.calculate_E_field()
+                self.__past_potentials = self.potentials
+            return self._E_field
+        else:
+            self.calculate_E_field()
+            self.__past_potentials = self.potentials
+            return self._E_field
+            
+    E_field = property(fget=get_E_field)
+    
+    def get_E_field_mag(self):
+        if hasattr(self,'_AMR_system__past_potentials'):
+            if not np.all(self.__past_potentials == self.potentials):
+                self.calculate_E_field()
+                self.__past_potentials = self.potentials
+            return self._E_field_magnitude
+        else:
+            self.calculate_E_field()
+            self.__past_potentials = self.potentials
+            return self._E_field_magnitude       
+    
+    E_field_mag = property(fget=get_E_field_mag)
+    
     def create_matrix(self):
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
         indices = np.arange(0,N,dtype=np.int64)
@@ -666,7 +698,7 @@ class AMR_system:
         self.potentials = (x_potentials+y_potentials)/2.
         self.potentials[self.sources] = self.grid.source_potentials[self.sources]
         
-    def show(self,**kwargs):
+    def show(self,title='',quiver=False,**kwargs):
         '''
         Need to supply coordinates of 'bounding' boxes for the assigned
         potentials, ie.
@@ -698,11 +730,20 @@ class AMR_system:
         grid_lines = self.grid.create_grid_line_collection(**kwargs)
         ax.add_collection(grid_lines) 
         fig.colorbar(plot)
+        plt.axis('square')
+        plt.autoscale()
+        if title:
+            plt.title(title)
+        plt.show()
+        
     def show_setup(self):
         self.grid.show()
         
     def calculate_E_field(self):
-        self.E_field = gradient(self.potentials,self.grid.x_h,self.grid.y_h)
+        print('calculating e field')
+        self._E_field = gradient(self.potentials,self.grid.x_h,self.grid.y_h)
+        self._E_field_magnitude = np.sqrt(self._E_field[0]**2 + 
+                                         self._E_field[1]**2)
     
 def build_from_segments(x=None,y=None,Ns=None):
     """
@@ -801,12 +842,12 @@ if __name__ == '__main__':
 #    xh,yh = build_from_segments(((0.1,0.01),(0.25,0.005),(1,0.01)),
 #                                ((0.35,0.01),(0.45,0.005),(1,0.01))
 #                               )
-    xh,yh = build_from_segments(((1,1000),))
+    xh,yh = build_from_segments(((1,500),))
     test = Grid(xh,yh)
     test.rectangle(1,(0.5,0.5),0.4,0.7)
     test.rectangle(1,(0.2,0.4),0.02,0.02)
     test.show(color=(0,0,0,0.1))
     system = AMR_system(test)
 
-    system.SOR(max_iter=10000,max_time=10,tol=1e-10,verbose=True)
+    system.SOR(max_iter=10000,max_time=1,tol=1e-10,verbose=True)
     system.show()
