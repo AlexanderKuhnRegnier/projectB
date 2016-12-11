@@ -122,9 +122,9 @@ class Grid:
         self.x_indices = np.arange(len(self.x))
         self.y_indices = np.arange(len(self.y))
         self.source_potentials = np.zeros(self.grid[0].shape)
-    def square(self,potential,origin,length):
+    def hollow_square(self,potential,origin,length):
         self.rectangle(potential,origin,length,length)
-    def rectangle(self,potential,origin,width,height):
+    def hollow_rectangle(self,potential,origin,width,height):
         x = (origin[0]-width/2.,origin[0]+width/2.)
         y = (origin[1]-height/2.,origin[1]+height/2.)
         x_indices = (np.abs(self.x-x[0]).argmin(),
@@ -155,10 +155,10 @@ class Grid:
                 (self.y_indices == y_indices[1]))
         self.source_potentials[mask] = potential      
         
-    def filled_square(self,potential,origin,length):
+    def square(self,potential,origin,length):
         self.filled_rectangle(potential,origin,length,length)
     
-    def filled_rectangle(self,potential,origin,width,height):
+    def rectangle(self,potential,origin,width,height):
         mask = ((self.x < origin[0]+width/2.)  & (self.x >= origin[0]-width/2.),
                 (self.y < origin[1]+height/2.) & (self.y >= origin[1]-height/2.) 
                )
@@ -180,7 +180,7 @@ class Grid:
             
         self.source_potentials[np.ix_(*mask)] = potential
         
-    def circle(self,potential,origin,radius):
+    def hollow_circle(self,potential,origin,radius):
         '''
         At present, the thickness of the perimeter is approx. as 
         thick as the largest stepsize used in the entire grid.
@@ -193,7 +193,7 @@ class Grid:
                        ((self.grid[1]-origin[1])**2)) < (radius-np.max(np.append(self.x_h,self.y_h)))**2)
         self.source_potentials[mask_whole & ~mask_inner] = potential
         
-    def filled_circle(self,potential,origin,radius):
+    def circle(self,potential,origin,radius):
         mask = ((((self.grid[0]-origin[0])**2) + 
                  ((self.grid[1]-origin[1])**2)) < radius**2)
         self.source_potentials[mask] = potential
@@ -803,21 +803,10 @@ if __name__ == '__main__':
 #                               )
     xh,yh = build_from_segments(((1,1000),))
     test = Grid(xh,yh)
-    test.filled_rectangle(1,(0.5,0.5),0.4,0.7)
-#    test.filled_rectangle(1,(0.2,0.4),0.02,0.02)
-#    test.show(color=(0,0,0,0.1))
+    test.rectangle(1,(0.5,0.5),0.4,0.7)
+    test.rectangle(1,(0.2,0.4),0.02,0.02)
+    test.show(color=(0,0,0,0.1))
     system = AMR_system(test)
-    xh2,yh2 = build_from_segments(((1,20),))
-    test2 = Grid(xh2,yh2)
-    test2.filled_rectangle(1,(0.5,0.5),0.4,0.7)
-#    test2.filled_rectangle(1,(0.2,0.4),0.02,0.02)
-    system2 = AMR_system(test2)
-    system2.SOR(max_time=4,tol=1e-12)
-    
-    system.interpolate(system2)
 
-#    system2.show()
-#    system.show()
-    
-#    system.SOR(max_iter=10000,max_time=10,tol=1e-10,verbose=True)
-#    system.show()
+    system.SOR(max_iter=10000,max_time=10,tol=1e-10,verbose=True)
+    system.show()
