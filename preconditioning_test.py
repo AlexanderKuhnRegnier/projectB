@@ -10,7 +10,7 @@ from copy import deepcopy
 from system import System,Shape
 import matplotlib.pyplot as plt
 
-Ns = (300,350)
+Ns = (200,250)
 tol = 1e-5
 max_iter = 50000
 
@@ -39,12 +39,12 @@ raw.SOR(tol=tol,max_iter=max_iter,verbose=False)
 rawtime = clock()-start
 times.append(rawtime)
 ######
-#raw.show(title='raw result')
+raw.show(title='raw result')
 #####
 
 
 #####
-#test.show(quiver=False)
+test.show(quiver=False)
 #####
 start = clock()
 #test.precondition(101,tol=1e-2,verbose=False)
@@ -55,7 +55,7 @@ precondtime = clock()-start
 times.append(precondtime)
 
 #####
-#test.show(title='after preconditioning')
+test.show(title='after preconditioning')
 #####
 test.SOR(tol=tol,max_iter=max_iter,verbose=False)
 #####
@@ -63,7 +63,7 @@ test.SOR(tol=tol,max_iter=max_iter,verbose=False)
 time2 = clock()-start
 times.append(time2)
 
-#test.show(title='result with precon')
+test.show(title='result with precon')
 #####
 
 

@@ -1073,7 +1073,7 @@ class System:
         return x,all_potentials[:iteration+1,...]                   
         
 if __name__ == '__main__': 
-    Ns = 100
+    Ns = 40
     test = System(Ns)
     '''
     #used for 'grid size case study' folder images
@@ -1095,7 +1095,7 @@ if __name__ == '__main__':
     start = clock()
 #    test.jacobi()    
 #    test.SOR_single(max_iter=0,tol=1e-12,max_time=5)
-    test.jacobi(max_iter=2000,tol=1e-12)
+    test.gauss_seidel(max_iter=3000,tol=1e-12)
 #    print(test.A.todense())
     print('time:',clock()-start)
     test.show()    

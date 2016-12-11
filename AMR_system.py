@@ -11,7 +11,7 @@ from numba import jit
 from scipy import sparse
 from time import clock
 from matplotlib.collections import LineCollection
-np.set_printoptions(threshold=np.inf)
+#np.set_printoptions(threshold=np.inf)
 plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
                                         #better than jet
 
@@ -159,14 +159,25 @@ class Grid:
         self.filled_rectangle(potential,origin,length,length)
     
     def filled_rectangle(self,potential,origin,width,height):
-        mask = ((self.x < origin[0]+width/2.)  & (self.x > origin[0]-width/2.),
-                (self.y < origin[1]+height/2.) & (self.y > origin[1]-height/2.) 
+        mask = ((self.x < origin[0]+width/2.)  & (self.x >= origin[0]-width/2.),
+                (self.y < origin[1]+height/2.) & (self.y >= origin[1]-height/2.) 
                )
         #use np.ix_ to broadcast the boolean 'mask' arrays into the correct
         #shape for use in indexing as below. The same could have been
         #achieved by using *self.grid[0]* instead of self.x (and likewise 
         #for y) as self.grid has been created from self.x and self.y using
         #np.meshgrid
+        if not (np.sum(mask[0]) and (np.sum(mask[1]))):
+            #if no gridpoint has been found by the above method, ie.
+            #no gridpoint is included within the limits, as the entire
+            #shape happens to be located within two gridpoints, but not
+            #overlapping any grid lines.
+            mask = (np.zeros(self.x.shape,dtype=np.bool),
+                    np.zeros(self.y.shape,dtype=np.bool))
+            #take the closest gridpoint!
+            mask[0][np.abs(self.x-origin[0]).argmin()] = True
+            mask[1][np.abs(self.y-origin[1]).argmin()] = True
+            
         self.source_potentials[np.ix_(*mask)] = potential
         
     def circle(self,potential,origin,radius):
@@ -337,6 +348,7 @@ class AMR_system:
         self.A = self.A.tocsc()
         
     def jacobi(self, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+        start = clock()
         #get diagonal, D
         D = sparse.diags(self.A.diagonal(),format='csc')
         L = sparse.tril(self.A,k=-1,format='csc')
@@ -347,7 +359,9 @@ class AMR_system:
         T = - D_inv.dot(L_U)
 #        print('T',type(T))
 #        D_inv_b = D_inv.dot(b).reshape(-1,) #just 0s anyway
-        print("Jacobi: finished creating matrices")
+        if verbose:
+            print("Jacobi: finished creating matrices")
+            print('Time taken:',clock()-start)
         
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
@@ -374,7 +388,96 @@ class AMR_system:
                 break
         self.potentials = x.reshape(self.Nsx,-1)        
         
+    def iterative_jacobi(self, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+        sources = self.sources
+        inv_source_mask = ~(sources.reshape(-1,1))
+        '''
+        Create array to contain the potential, including a boundary -
+        the boundary conditions, which are never altered during the program's
+        execution.
+        Then 'fill in' the potential at the center of this matrix
+        
+        Initialising the potentials with 0s is not really necessary, since 
+        this is done at instance creation anyway, plus this overwrites 
+        later changes to the potential with preconditioning, for example
+        '''        
+        x = np.zeros((self.Nsx+2,self.Nsy+2))
+        x[1:-1,1:-1] = self.potentials
+        #get diagonal, D
+        D = self.A.diagonal()
+        start = clock()
+        for iteration in xrange(max_iter):
+            #need to use 'extended' step size array, since the 
+            #boundary conditions are being used here as well
+            x = self.jacobi_sub_func(x,
+                                  np.array([self.Nsx,self.Nsy],dtype=np.int64),
+                                  sources,D,self.grid.x_h_extended,
+                                  self.grid.y_h_extended)
+            x[1:-1,1:-1][sources] = self.grid.source_potentials[sources]
+            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+                                                     )[inv_source_mask])
+#            plt.figure()
+#            plt.imshow(x.T,origin='lower',interpolation='none')
+#            plt.colorbar()
+#            plt.show()
+            if verbose:
+                print("iteration, error:",iteration,error)
+            if error < tol:
+                print('Error in potential lower than tolerance')
+                break
+            if (clock()-start) > max_time:
+                print('Time limit exceed')
+                break
+        self.potentials = x[1:-1,1:-1] 
+        
+    @staticmethod
+    @jit(nopython=True,cache=True)
+    def jacobi_sub_func(x,Ns,sources,D,x_h,y_h):
+        out = np.zeros(x.shape)
+        count = -1
+        for i in range(0,Ns[0]):
+            i_1 = i+1
+            x_h_i = x_h[i]
+            x_h_i_1 = x_h[i_1]
+            x_h_divisor = x_h_i*x_h_i_1**2.
+#            x_h_divisor = 1.
+            for j in range(0,Ns[1]):
+                count += 1
+                j_1 = j+1
+                y_h_j = y_h[j]
+                y_h_j_1 = y_h[j_1]
+                y_h_divisor = y_h_j*y_h_j_1**2. 
+#                y_h_divisor = 1.
+                if sources[i,j]:
+                    continue
+                '''
+                Need:
+                    i_1
+                    i_1-1 -> i
+                    i_1+1
+                    j_1
+                    j_1-1 -> j
+                    j_1+1
+                combinations:
+                    i_1,j_1+1
+                    i_1,j_1-1
+                    i_1+1,j_1
+                    i_1-1,j_1
+                    these are transformed as above (needs fewer operations)
+                '''
+                out[i_1,j_1] = -((1./(D[count])) *(
+                                 ((y_h_j*  x[i_1,j_1+1]+
+                                   y_h_j_1*x[i_1,j])
+                                     /y_h_divisor)+
+                                 ((x_h_i*  x[i_1+1,j_1]+
+                                   x_h_i_1*x[i,    j_1])
+                                     /x_h_divisor)
+                                              )
+                             )
+        return out
+        
     def gauss_seidel(self, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+        start = clock()
         #get diagonal, D
         D = sparse.diags(self.A.diagonal(),format='csc')
         L = sparse.tril(self.A,k=-1,format='csc')
@@ -382,7 +485,9 @@ class AMR_system:
         L_D_inv = sparse.linalg.inv(L+D)
 #        L_D_inv_b = np.dot(L_D_inv,b)
         T = -L_D_inv.dot(U)
-        print("Gauss Seidel: finished creating matrices")
+        if verbose:
+            print("Gauss Seidel: finished creating matrices")
+            print('Time taken:',clock()-start)
         x = self.potentials.reshape(-1,)
         orig_x = x.copy()
         sources = self.sources.reshape(-1,)
@@ -407,8 +512,160 @@ class AMR_system:
                 break
         self.potentials = x.reshape(self.Nsx, -1)        
         
-    def SOR(self):
-        pass
+    def SOR(self, w=1.5, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+        '''
+        A = L + D + U
+        A x = b - b are the boundary conditions
+
+        x is arranged like:
+            u_1,1
+            u_1,2
+            u_2,1
+            u_2,2
+
+        D is of length N^2, every element is -4, N is the number of gridpoints
+        '''        
+        self.w = float(w)
+        sources = self.sources
+        inv_source_mask = ~(sources.reshape(-1,1))
+        '''
+        Create array to contain the potential, including a boundary -
+        the boundary conditions, which are never altered during the program's
+        execution.
+        Then 'fill in' the potential at the center of this matrix
+        
+        Initialising the potentials with 0s is not really necessary, since 
+        this is done at instance creation anyway, plus this overwrites 
+        later changes to the potential with preconditioning, for example
+        '''        
+        x = np.zeros((self.Nsx+2,self.Nsy+2))
+        x[1:-1,1:-1] = self.potentials
+        #get diagonal, D
+        D = self.A.diagonal()
+        start = clock()
+        for iteration in xrange(max_iter):
+            #need to use 'extended' step size array, since the 
+            #boundary conditions are being used here as well
+            x = self.SOR_sub_func(x,
+                                  np.array([self.Nsx,self.Nsy],dtype=np.int64),
+                                  sources,w,D,self.grid.x_h_extended,
+                                  self.grid.y_h_extended)
+            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+                                                     )[inv_source_mask])
+            if verbose:
+                print("iteration, error:",iteration,error)
+            if error < tol:
+                print('Error in potential lower than tolerance')
+                break
+            if (clock()-start) > max_time:
+                print('Time limit exceed')
+                break
+        self.potentials = x[1:-1,1:-1]            
+        
+    @staticmethod
+    @jit(nopython=True,cache=True)
+    def SOR_sub_func(x,Ns,sources,w,D,x_h,y_h):
+        w_1 = (1.-w)
+#        initial_norm = np.linalg.norm(x)
+        count = -1
+        for i in range(0,Ns[0]):
+            i_1 = i+1
+            x_h_i = x_h[i]
+            x_h_i_1 = x_h[i_1]
+            x_h_divisor = x_h_i*x_h_i_1**2
+            for j in range(0,Ns[1]):
+                count += 1
+                j_1 = j+1
+                y_h_i = y_h[j]
+                y_h_i_1 = y_h[j_1]
+                y_h_divisor = y_h_i*y_h_i_1**2 
+                if sources[i,j]:
+                    continue
+                '''
+                Need:
+                    i_1
+                    i_1-1 -> i
+                    i_1+1
+                    j_1
+                    j_1-1 -> j
+                    j_1+1
+                combinations:
+                    i_1,j_1+1
+                    i_1,j_1-1
+                    i_1+1,j_1
+                    i_1-1,j_1
+                    these are transformed as above (needs fewer operations)
+                '''
+                x[i_1,j_1] = ( w_1*x[i_1,j_1] - 
+                              (w/(D[count])) *(
+                                 ((y_h_i*  x[i_1,j_1+1]+
+                                   y_h_i_1*x[i_1,j])/y_h_divisor )+
+                                 ((x_h_i*  x[i_1+1,j_1]+
+                                   x_h_i_1*x[i,j_1])/x_h_divisor)
+                                              )
+                             )
+        return x
+        
+    def interpolate(self,other):
+        #calculate gradients between grid points of the other system
+        #these gradients will then be used to interpolate the other potentials
+        #to the current potentials
+        gradients = gradient(other.potentials,other.grid.x_h,other.grid.y_h)
+        #take difference between own x positions and other x positions
+        x_diff = other.grid.x - self.grid.x.reshape(-1,1)
+        #mask these differences, since we only want to find points 
+        #where our own x positions are larger than the other x positions
+#        print(x_diff)
+        x_masked = np.ma.array(x_diff,mask=x_diff>1e-12)
+#        print(x_masked)
+        #find the closest grid point from the other x coordinates, which
+        #came closest before our own x coordinates
+        #find maximum here, since the differences are negative, and 
+        #we wish to find the point closest to 0
+        x_diff_maxs = np.max(x_masked,axis=1).reshape(-1,1)
+        #get the indices of where this happens
+        x_indices = np.where(x_diff==x_diff_maxs)[1]
+        x_distances = np.abs(x_diff_maxs.flatten())
+        
+        #repeat the above for the y coordinates
+        y_diff = other.grid.y - self.grid.y.reshape(-1,1)
+        y_masked = np.ma.array(y_diff,mask=y_diff>1e-12)
+        y_diff_maxs = np.max(y_masked,axis=1).reshape(-1,1)
+        y_indices = np.where(y_diff == y_diff_maxs)[1]
+        y_distances = np.abs(y_diff_maxs.flatten())
+#        print(x_indices)
+#        print(y_indices)
+#        
+        #create a 'dummy row' for the gradients at the very end, which would
+        #then be used in the calculation for the new potential for those 
+        #grid points which lie exactly on the last row or column.
+        #Since the distances there are 0, the value of the gradient does
+        #not matter there.
+        x_gradients = np.zeros((gradients[0].shape[0]+1,gradients[0].shape[1]))
+        y_gradients = np.zeros((gradients[1].shape[0],gradients[1].shape[1]+1))
+        
+        x_gradients[:-1] = gradients[0]
+        y_gradients[:,:-1] = gradients[1]
+        
+
+        x_potentials = (other.potentials[x_indices]+
+                        x_distances.reshape(-1,1)*x_gradients[x_indices])
+        #use y indices to select resulting potentials,
+        #effectively reshaping array once again to fit new, desired, shape
+        x_potentials = x_potentials[:,y_indices]
+        
+#        print(other.potentials.shape)
+#        print(y_indices.shape)
+#        print(y_distances.shape)
+#        print(y_gradients.shape)        
+#        
+        y_potentials = (other.potentials[:,y_indices]+
+                        y_distances.reshape(1,-1)*y_gradients[:,y_indices])
+        y_potentials = y_potentials[x_indices]
+        
+        self.potentials = (x_potentials+y_potentials)/2.
+        self.potentials[self.sources] = self.grid.source_potentials[self.sources]
+        
     def show(self,**kwargs):
         '''
         Need to supply coordinates of 'bounding' boxes for the assigned
@@ -445,9 +702,9 @@ class AMR_system:
         self.grid.show()
         
     def calculate_E_field(self):
-        self.E_field = gradient(self.potentials,self.x_h,self.y_h)
+        self.E_field = gradient(self.potentials,self.grid.x_h,self.grid.y_h)
     
-def build_from_segments(Ns,x=None,y=None):
+def build_from_segments(x=None,y=None,Ns=None):
     """
     Create arrays containing step sizes to be used to initialise a 
     Grid instance
@@ -531,23 +788,36 @@ def build_from_segments(Ns,x=None,y=None):
             print('Non-homogeneous parameter specifications!')
     if len(outputs)==1:
         outputs = [outputs[0],outputs[0]]
+    if Ns:
+        if hasattr(Ns,'__iter__'):
+            Nsx,Nsy = Ns
+        else:
+            Nsx = Ns
+            Nsy = Ns            
+        if (len(outputs[0]) != (Nsx-1)) or (len(outputs[1]) != (Nsy-1)):
+            print('Number of stepsizes output do not agree with number input!')
     return outputs
 if __name__ == '__main__':
-    Ns = (100,50)
-    
-#    xh,yh = build_from_segments(Ns,
-#                                ((0.1,0.01),(0.25,0.005),(1,0.01)),
+#    xh,yh = build_from_segments(((0.1,0.01),(0.25,0.005),(1,0.01)),
 #                                ((0.35,0.01),(0.45,0.005),(1,0.01))
 #                               )
-    xh,yh = build_from_segments(Ns,((1,0.005),))
-    
+    xh,yh = build_from_segments(((1,1000),))
     test = Grid(xh,yh)
     test.filled_rectangle(1,(0.5,0.5),0.4,0.7)
-    test.filled_rectangle(1,(0.2,0.4),0.02,0.02)
-    test.show(color=(0,0,0,0.1))
-    start = clock()
+#    test.filled_rectangle(1,(0.2,0.4),0.02,0.02)
+#    test.show(color=(0,0,0,0.1))
     system = AMR_system(test)
-    print('Created matrix:',clock()-start)
-    system.jacobi(max_iter=1000000,max_time=100,tol=1e-10,verbose=False)
-    print('time:',clock()-start)
-    system.show()
+    xh2,yh2 = build_from_segments(((1,20),))
+    test2 = Grid(xh2,yh2)
+    test2.filled_rectangle(1,(0.5,0.5),0.4,0.7)
+#    test2.filled_rectangle(1,(0.2,0.4),0.02,0.02)
+    system2 = AMR_system(test2)
+    system2.SOR(max_time=4,tol=1e-12)
+    
+    system.interpolate(system2)
+
+#    system2.show()
+#    system.show()
+    
+#    system.SOR(max_iter=10000,max_time=10,tol=1e-10,verbose=True)
+#    system.show()
