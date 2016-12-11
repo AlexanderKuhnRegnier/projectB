@@ -8,7 +8,6 @@ Calculating the homogeneity of the electric field generated for a
 given configuration of the sources.
 """
 from __future__ import print_function
-from system import Shape,System
 import numpy as np
 import matplotlib.pyplot as plt
 from time import clock
@@ -30,8 +29,8 @@ system.SOR(w=1.2,tol=1e-14,max_time=1)
 print('dust size:',dust_size)
 
 #calculate Electric field and electric field magnitude
-E_field = gradient(system.potentials)
-E_field_mag = np.sqrt(E_field[0]**2+E_field[1]**2)
+E_field = system.E_field
+E_field_mag = system.E_field_mag
 
 #plt.figure()
 #plt.imshow(E_field_mag.T,origin='lower',interpolation='none')
