@@ -31,6 +31,7 @@ in this case 10 V
     ie. scaling factor = (10 V)^-1
 """
 from __future__ import print_function
+from scipy.optimize import curve_fit
 from system import Shape,System
 from AMR_system import gradient
 import numpy as np
@@ -44,13 +45,18 @@ plt.ioff()
 class Cable(System):
     def cross_section_potential(self,side_length=0,show=True,savepath=''):
         '''
-        now, plot a cross section of the potential across the diagonal.
+        now, plot a cross section of the potential across the center.
         Ideally, the number of grid points should be an ODD number for this
         to work ideally - due to the symmetry of the problem.
         '''
-        cross_section = np.diag(self.potentials)
+        #use middle row!
+        mid_row_index = int((self.Nsx-1)/2.)
+        cross_section = self.potentials[mid_row_index]
+        
+        #use diagonal!
+#        cross_section = np.diag(self.potentials)
         plt.figure()
-        plt.title('1-D Cross-Section of the Potential across the Diagonal\n'
+        plt.title('1-D Cross-Section of the Potential across the cross section\n'
                   +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
                   format(self.tol,self.Nsx,self.Nsy,side_length))
         grid_positions = self.grid[0][:,0]
@@ -61,6 +67,25 @@ class Cable(System):
         ymin,ymax = plt.ylim()
         plt.ylim(ymax=ymax*1.1)
         plt.tight_layout()
+        
+        #the potential should vary as ln(1/r), where r is the distance
+        #from the vertex. Therefore try to fit a curve like a*ln(b/r) to one
+        #side of the data, where a,b are constants.
+        
+        func = lambda r,a,b,s:a*np.log(b/(r+s))
+        #-10 just to be safe not to clip the boundary with the source
+        #/2. so that the last part of the interval is probed
+        points = int(((1-side_length)/(2.*self.h)-10)/2.)
+        field_values = cross_section[-points:]
+        x = np.arange(1,field_values.size+1,dtype=np.float64)
+        popt,pcov = curve_fit(func,x,field_values,bounds=(1e-9,(1e4,1e3,1e6)))
+        print('popt')
+        print(popt)
+        print('stds')
+        print(np.sqrt(np.diag(pcov)))
+        x_plot = (x+self.Nsx-points)/self.Nsx
+        plt.plot(x_plot,popt[0]*(x**-1))        
+        
         if savepath:
             plt.savefig(savepath,bbox_inches='tight',dpi=200) 
             plt.close('all') 
@@ -74,25 +99,55 @@ class Cable(System):
     def cross_section(self,side_length=0,show=True,savepath=''):
         '''
         now, plot a cross section of the electric field magnitude across the 
-        diagonal. Ideally, the number of grid points should be an ODD number 
+        center. Ideally, the number of grid points should be an ODD number 
         for this to work ideally - due to the symmetry of the problem.
         '''
         assert self.Nsy == self.Nsx,'Needs square grid! (uses diagonal)'
         E_field = gradient(self.potentials,[self.h]*(self.Nsx-1))
         E_field_mag = np.sqrt(E_field[0]**2+E_field[1]**2)
-        cross_section = np.diag(E_field_mag)
+        
+        #use middle row!
+        mid_row_index = int((self.Nsx-1)/2.)
+        skip = int((side_length/self.h)) #skip ahead to be claer of the source
+        skip += int(self.Nsx/2.)
+        cross_section = E_field_mag[mid_row_index,skip:]
+        
+        #use diagonal!
+#        cross_section = np.diag(E_field_mag)
+
         plt.figure()
-        plt.title('1-D Cross-Section of the Electric Field Magnitude across the Diagonal\n'
+        plt.title('1-D Cross-Section of the Electric Field Magnitude cross section\n'
                   +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
                   format(self.tol,self.Nsx,self.Nsy,side_length))
-        grid_positions = self.grid[0][:,0]
+        grid_positions = self.grid[0][:,0][skip:]
+        print('skip',skip)
+        print('grid positions',grid_positions.shape)
+        print('cross section',cross_section.shape)
         plt.plot(grid_positions,cross_section,label='electric field magnitude')
         plt.xlabel('Distance from left wall (natural units)')
         plt.ylabel('Electric Field Magnitude (scaled)')
-    #    plt.legend()
         ymin,ymax = plt.ylim()
         plt.ylim(ymax=ymax*1.1)
         plt.tight_layout()
+        
+        #the electric field should vary as 1/r, where r is the distance
+        #from the vertex. Therefore try to fit a curve like k/r to one side
+        #of the data, where k is a constant.
+        
+        func = lambda r,k,s:k/(r+s)
+        x = np.arange(0,cross_section.size,dtype=np.float64)
+        popt,pcov = curve_fit(func,x,cross_section,bounds=((0.1,1),(200,200)))
+        print('popt')
+        print(popt)
+        print('stds')
+        stds = np.sqrt(np.diag(pcov))
+        print(stds)
+        ratio = stds/popt
+        results = np.vstack((popt,stds,ratio))
+        float_format = lambda s : '{:0.2e}'.format(s)
+        formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
+        plt.plot(grid_positions,[func(i,*popt) for i in x],label=str(formatted))
+        plt.legend()
         if savepath:
             plt.savefig(savepath,bbox_inches='tight',dpi=200) 
             plt.close('all') 
@@ -118,30 +173,32 @@ def name_folder(folder):
 '''
 show - to test out shapes
 '''
-show = True
+show = False
 
 if show:
-    Ns = 250
-    side_length = (1/3.)
-    square_coaxial_cable = Shape(Ns,5,(0.5,0.5),3e-1,side_length,shape='square',
+    Ns = 300
+    side_length = 0.45
+    square_coaxial_cable = Shape(Ns,1,(0.5,0.5),side_length,shape='square',
                                  filled=True)
     cable = Cable(Ns)
     cable.add(square_coaxial_cable)
-    cable.SOR_single(tol=1e-14,max_iter=50000,max_time=100)   
+    cable.SOR_single(tol=1e-16,max_iter=10000000,max_time=5,verbose=False)   
     cable.cross_section(side_length=side_length)
     
 picture_folder = name_folder(os.path.join(os.getcwd(),'potential_cross_sections'))            
 #import time
 #start = time.clock()
-Ns = 300
+#anything below 250 makes the electric field look to discrete, and also 
+#uneven when comparing the electric field at the two opposing vertices
+Ns = 400
 #print('time: {:.3f}'.format(time.clock()-start))
 #cable.show_setup(interpolation='none')
-tol = 1e-10
+tol = 1e-14
 max_iter = 500000
-max_time = 100
-solve = False
+max_time = 200
+solve = True
 
-side_lengths = np.linspace(1e-1,9e-1,10)
+side_lengths = np.linspace(1e-2,2e-1,10)
 
 if solve:
     os.mkdir(picture_folder)
