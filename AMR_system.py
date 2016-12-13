@@ -127,6 +127,13 @@ class Grid:
             self.size = (size,size) 
         else:
             self.size = size        
+            
+    def __str__(self):
+        a='''This is a test string
+             for testing purposes
+             .'''
+        return a
+            
     def hollow_square(self,potential,origin,length):
         self.rectangle(potential,origin,length,length)
     def hollow_rectangle(self,potential,origin,width,height):
@@ -254,7 +261,7 @@ class AMR_system(object):
     Variable mesh sizing along the rows and column in order to 
     increase resolution locally around a specific point
     '''
-    def __init__(self,grid):
+    def __init__(self,grid,create_matrix = True):
         '''
         Pass a Grid instance
         '''
@@ -265,7 +272,12 @@ class AMR_system(object):
                                 dtype=np.bool)
         self.Nsx = self.potentials.shape[0]
         self.Nsy = self.potentials.shape[1]
-        self.create_matrix()
+        #we don't need to create this matrix if we are not going to do
+        #any solving with the class, ie. if we just want to use its 
+        #plotting methods. Could also be implemented with multiple 
+        #ihneritance.
+        if create_matrix:   
+            self.create_matrix()
 
     #use properties to get the electric field and its magnitude,
     #since the electric field would only have to be re-calculated
@@ -549,7 +561,7 @@ class AMR_system(object):
                 break
         self.potentials = x.reshape(self.Nsx, -1)        
         
-    def SOR(self, w=1.5, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+    def SOR(self, w=1.5, tol=1e-2, max_iter=100000, max_time=10, verbose=True):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -579,25 +591,32 @@ class AMR_system(object):
         x[1:-1,1:-1] = self.potentials
         #get diagonal, D
         D = self.A.diagonal()
+        Ns_array = np.array([self.Nsx,self.Nsy],dtype=np.int64)
+        errors = np.zeros(max_iter,dtype=np.float64)
+        times  = np.zeros(max_iter,dtype=np.float64)
         start = clock()
         for iteration in xrange(max_iter):
             #need to use 'extended' step size array, since the 
             #boundary conditions are being used here as well
-            x = self.SOR_sub_func(x,
-                                  np.array([self.Nsx,self.Nsy],dtype=np.int64),
+            x = self.SOR_sub_func(x, Ns_array,
                                   sources,w,D,self.grid.x_h_extended,
                                   self.grid.y_h_extended)
             error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
-                                                     )[inv_source_mask])
+                                                      [inv_source_mask]))
+            errors[iteration] = error
+            time_diff = clock()-start
+            times[iteration]  = time_diff
             if verbose:
                 print("iteration, error:",iteration,error)
             if error < tol:
                 print('Error in potential lower than tolerance')
                 break
-            if (clock()-start) > max_time:
+            if time_diff > max_time:
                 print('Time limit exceed')
                 break
-        self.potentials = x[1:-1,1:-1]            
+        self.potentials = x[1:-1,1:-1] 
+        self.errors = errors[:iteration+1]
+        self.times = times[:iteration+1]      
         
     @staticmethod
     @jit(nopython=True,cache=True)
@@ -843,6 +862,7 @@ def build_from_segments(x=None,y=None,Ns=None):
         if (len(outputs[0]) != (Nsx-1)) or (len(outputs[1]) != (Nsy-1)):
             print('Number of stepsizes output do not agree with number input!')
     return outputs
+    
 if __name__ == '__main__':
 #    xh,yh = build_from_segments(((0.1,0.01),(0.25,0.005),(1,0.01)),
 #                                ((0.35,0.01),(0.45,0.005),(1,0.01))

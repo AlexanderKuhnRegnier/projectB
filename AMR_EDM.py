@@ -171,11 +171,11 @@ if __name__ == '__main__':
     #with k=1, and a dust size of 0.1 mm (100e-6 m),
     #the factor has to be at least 300 in order to be able to
     #depict the dust accurately!
-    test,dust_size = create_EDM_system((26*factor,3*factor),k,
+    test,dust_size,position = create_EDM_system((26*factor,3*factor),k,
                              size=(260*(1+2*k),30*(1+2*k)),
                              small_sources=True,dust_pos=350.,
                              dust_size=1e-1)
     test.show_setup()
     print('Dust Size:',dust_size)
-#    test.SOR(w=1.5,tol=1e-10,max_time=60)
-#    test.show(quiver=False)
+    test.SOR(w=1.5,tol=1e-10,max_time=10)
+    test.show(quiver=False)

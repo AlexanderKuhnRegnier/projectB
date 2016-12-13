@@ -18,7 +18,7 @@ from AMR_system import gradient
 
 factor = 40
 k = 0.9
-system,dust_size = create_EDM_system((26*factor,3*factor),k,
+system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      size=(260*(1+2*k),30*(1+2*k)),
                                      small_sources=True,
                                      dust_pos=300,
