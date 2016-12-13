@@ -111,8 +111,9 @@ class Grid:
         
         self.x = np.append([0.],np.cumsum(self.x_h))
         
+        self.aspect_ratio = aspect_ratio        
         y_sum = np.sum(y_h)
-        self.y_h = y_h / (y_sum*(1./aspect_ratio))
+        self.y_h = y_h / (y_sum*(1./self.aspect_ratio))
         
         self.y_h_extended = np.hstack((self.y_h[0],self.y_h,
                                        self.y_h[-1]))        

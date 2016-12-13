@@ -5,3 +5,8 @@ than the one currently installed by default on the college computers.
 Might need to update scipy in a manner similar to the above, I found that on the college computers, 
 it might be required to remove scipy beforehand using 'conda remove scipy'
 before being able to update it via 'conda install scipy' or 'conda update scipy'
+
+When running longer simulations using the iPython console
+an error with the message "I/O operation on closed file" was encountered 
+on some occasions. Running the same program in simple python console
+resolved the problem.

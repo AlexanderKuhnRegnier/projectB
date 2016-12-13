@@ -36,7 +36,29 @@ def create_EDM_system(Ns,kx,ky=None,size=(1.,1.),dust_pos=None,
     grid = Grid(xh,yh,aspect_ratio = float(Ns[1])/Ns[0],size=size)
     #compute parameters for shape creation based on padding selected using
     #*kx* and *ky* as well as the known shape ratios.
-    A = Ns[1]/float(Ns[0])
+    
+    return create_EDM_system_from_grid(grid,kx,ky,size=size,dust_pos=dust_pos,
+                                       dust_size=dust_size,
+                                       small_sources=small_sources)
+  
+def create_EDM_system_from_grid(grid,kx,ky=None,size=(1.,1.),dust_pos=None,
+                      dust_size=1e-1,small_sources=True):
+    '''
+    Capable of creating the EDM shapes on non_uniform grids specified by the
+    passed-in Grid instance.
+    Create the shapes needed to model the EDM experiment and then add
+    these shapes to a system, both with the given grid size.
+    kx and ky describe the space left between the end of the experimental
+    setup and the boundary, which will be held at 0V.
+    This distance is described as a multiple of the length of the 
+    experimental setup in that axis.
+    '''
+    if ky == None:
+        ky = kx
+
+    #compute parameters for shape creation based on padding selected using
+    #*kx* and *ky* as well as the known shape ratios.
+    A = grid.aspect_ratio
     hx = 1./(26*(2*kx+1))
     hy = A/(3*(2*ky+1))
     Sx = kx * 26*hx
@@ -129,15 +151,22 @@ def create_EDM_system(Ns,kx,ky=None,size=(1.,1.),dust_pos=None,
                 system.grid.source_potentials[index] = potential
                 system.potentials[index] = potential
                 system.sources[index] = True
+        #calculate physical size of the particle given the dimensions of
+        #the system given in the *size* argument. Take into account the
+        #spacings between the grid points as well
         dust_tuple = ((system.grid.x[highest_x_grid]-
-                       system.grid.x[lowest_x_grid])*size[0],
+                       system.grid.x[lowest_x_grid]
+                       +system.grid.x_h[lowest_x_grid-1]/2.
+                       +system.grid.x_h[highest_x_grid]/2.)*size[0],
                       (system.grid.y[top_dust_grid]-
-                       system.grid.y[bottom_dust_grid])*size[0])
-        
-    return system,dust_tuple
-    
+                       system.grid.y[bottom_dust_grid]
+                       +system.grid.y_h[bottom_dust_grid-1]/2.
+                       +system.grid.y_h[top_dust_grid]/2.)*size[0])
+    return system,dust_tuple,(system.grid.grid[0][lowest_x_grid,top_dust_grid],
+                              system.grid.grid[1][lowest_x_grid,top_dust_grid])
+  
 if __name__ == '__main__':
-    factor = 300
+    factor = 100
     k = 1.
     #with k=1, and a dust size of 0.1 mm (100e-6 m),
     #the factor has to be at least 300 in order to be able to
