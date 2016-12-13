@@ -68,24 +68,6 @@ class Cable(System):
         plt.ylim(ymax=ymax*1.1)
         plt.tight_layout()
         
-        #the potential should vary as ln(1/r), where r is the distance
-        #from the vertex. Therefore try to fit a curve like a*ln(b/r) to one
-        #side of the data, where a,b are constants.
-        
-        func = lambda r,a,b,s:a*np.log(b/(r+s))
-        #-10 just to be safe not to clip the boundary with the source
-        #/2. so that the last part of the interval is probed
-        points = int(((1-side_length)/(2.*self.h)-10)/2.)
-        field_values = cross_section[-points:]
-        x = np.arange(1,field_values.size+1,dtype=np.float64)
-        popt,pcov = curve_fit(func,x,field_values,bounds=(1e-9,(1e4,1e3,1e6)))
-        print('popt')
-        print(popt)
-        print('stds')
-        print(np.sqrt(np.diag(pcov)))
-        x_plot = (x+self.Nsx-points)/self.Nsx
-        plt.plot(x_plot,popt[0]*(x**-1))        
-        
         if savepath:
             plt.savefig(savepath,bbox_inches='tight',dpi=200) 
             plt.close('all') 
