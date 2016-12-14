@@ -561,7 +561,7 @@ class AMR_system(object):
                 break
         self.potentials = x.reshape(self.Nsx, -1)        
         
-    def SOR(self, w=1.5, tol=1e-2, max_iter=100000, max_time=10, verbose=True):
+    def SOR(self, w=1.5, tol=1e-2, max_iter=1000000, max_time=10, verbose=True):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
