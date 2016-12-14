@@ -16,7 +16,7 @@ plt.ioff()
 from AMR_EDM import create_EDM_system
 from AMR_system import gradient
 
-factor = 40
+factor = 150
 k = 0.9
 system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      size=(260*(1+2*k),30*(1+2*k)),
@@ -24,7 +24,7 @@ system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      dust_pos=300,
                                      dust_size=2.)
 #system.show_setup()
-system.SOR(w=1.2,tol=1e-14,max_time=1)
+system.SOR(w=1.9,tol=1e-10,max_time=100)
 #system.show()
 print('dust size:',dust_size)
 
@@ -61,7 +61,7 @@ plt.show()
 
 #%%
 #tolerances = [0.01,1e-11]
-tolerances = np.linspace(1e-13,1,200)
+tolerances = np.linspace(1e-13,1,50000)
 print('total number of points along x:',beam_path.size)
 
 longest = []
