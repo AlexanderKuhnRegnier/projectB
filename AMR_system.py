@@ -425,7 +425,7 @@ class AMR_system(object):
         for i in range(max_iter):
             x = T.dot(x).reshape(-1,) # + D_inv_b all 0s
             x[sources] = orig_x[sources]
-            error = np.mean(np.abs(self.A.dot(x))[inv_sources])  
+            error = np.linalg.norm(self.A.dot(x)[inv_sources])  
             #similar computational effort as 2xnorm
             if verbose:
                 print("i, error:",i,error)
@@ -463,8 +463,8 @@ class AMR_system(object):
                                   sources,D,self.grid.x_h_extended,
                                   self.grid.y_h_extended)
             x[1:-1,1:-1][sources] = self.grid.source_potentials[sources]
-            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
-                                                     )[inv_source_mask])
+            error = np.linalg.norm(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+                                                       [inv_source_mask])
 #            plt.figure()
 #            plt.imshow(x.T,origin='lower',interpolation='none')
 #            plt.colorbar()
@@ -550,7 +550,7 @@ class AMR_system(object):
         for i in range(max_iter):
             x = T.dot(x).reshape(-1,) # + L_D_inv_b
             x[sources] = orig_x[sources]
-            error = np.mean(np.abs(self.A.dot(x))[inv_sources])   
+            error = np.linalg.norm(self.A.dot(x)[inv_sources])   
             if verbose:
                 print("i, error:",i,error)
             if error < tol:
@@ -601,8 +601,9 @@ class AMR_system(object):
             x = self.SOR_sub_func(x, Ns_array,
                                   sources,w,D,self.grid.x_h_extended,
                                   self.grid.y_h_extended)
-            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
-                                                      [inv_source_mask]))
+            error = np.linalg.norm(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+                                                       [inv_source_mask])
+            
             errors[iteration] = error
             time_diff = clock()-start
             times[iteration]  = time_diff
@@ -703,7 +704,6 @@ class AMR_system(object):
         x_gradients[:-1] = gradients[0]
         y_gradients[:,:-1] = gradients[1]
         
-
         x_potentials = (other.potentials[x_indices]+
                         x_distances.reshape(-1,1)*x_gradients[x_indices])
         #use y indices to select resulting potentials,
@@ -867,12 +867,15 @@ if __name__ == '__main__':
 #    xh,yh = build_from_segments(((0.1,0.01),(0.25,0.005),(1,0.01)),
 #                                ((0.35,0.01),(0.45,0.005),(1,0.01))
 #                               )
-    xh,yh = build_from_segments(((1,500),))
+    xh,yh = build_from_segments(((1,50),))
     test = Grid(xh,yh)
     test.rectangle(1,(0.5,0.5),0.4,0.7)
     test.rectangle(1,(0.2,0.4),0.02,0.02)
     test.show(color=(0,0,0,0.1))
     system = AMR_system(test)
 
-    system.SOR(max_iter=10000,max_time=1,tol=1e-10,verbose=True)
+#    system.SOR(max_iter=10000,max_time=1,tol=1e-10,verbose=True)
+#    system.iterative_jacobi()
+    system.jacobi(max_time=2)
+#    system.gauss_seidel()
     system.show()
