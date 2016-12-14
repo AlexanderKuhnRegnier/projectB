@@ -56,11 +56,11 @@ Note: to save the animation, 'ffmpeg.exe' must
 be located in the script's directory.
 '''
 anim = True
-save = False
-frames = 4000    
+save = True
+frames = 1000    
     
 if anim:
-    Ns = (500,500)
+    Ns = (300,300)
     side_length = (1/3.)
     square_coaxial_cable = Shape(Ns,1.5,(0.5,0.5),3e-1,side_length,shape='square',
                                  filled=True)
@@ -91,8 +91,8 @@ if anim:
     
     if save:
         plt.rcParams['animation.ffmpeg_path'] = os.path.join(os.getcwd(),'ffmpeg.exe')
-        FFwriter = animation.FFMpegWriter(fps=10,bitrate=3000)
-        ani.save('test.mp4',writer=FFwriter,dpi=300)
+        FFwriter = animation.FFMpegWriter(fps=24,bitrate=20000)
+        ani.save('coaxial_cable.mp4',writer=FFwriter,dpi=200)
         plt.close('all')
     else:
         plt.show()
