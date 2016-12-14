@@ -99,3 +99,6 @@ ENV/
 
 #conda update file
 conda.cmd
+
+#random
+*.db

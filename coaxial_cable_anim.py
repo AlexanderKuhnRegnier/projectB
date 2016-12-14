@@ -57,17 +57,17 @@ be located in the script's directory.
 '''
 anim = True
 save = False
-frames = 500    
+frames = 4000    
     
 if anim:
-    Ns = (100,500)
+    Ns = (500,500)
     side_length = (1/3.)
     square_coaxial_cable = Shape(Ns,1.5,(0.5,0.5),3e-1,side_length,shape='square',
-                                 filled=False)
+                                 filled=True)
     cable = System(Ns)
     cable.add(square_coaxial_cable) 
     
-    all_potentials = cable.SOR_anim(tol=0,max_iter=frames)
+    all_potentials = cable.SOR_anim(w=1.9999999999999999999999999995,tol=0,max_iter=frames)
     plt.ioff()
     fig,ax = plt.subplots(figsize=(15,15))
     image = plt.imshow(all_potentials[0].T,
@@ -75,7 +75,9 @@ if anim:
                         interpolation = 'none',
                         aspect='equal',extent=None,
                         origin='lower')
-    iter_text = ax.set_title('')
+    iter_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, 
+            size=20,bbox=dict(facecolor='white',alpha=0.5))
+
     plt.colorbar()
     
     def update_image(*args):
@@ -84,8 +86,8 @@ if anim:
         image.set_array(all_potentials[args[0]].T)
         return image,iter_text
     
-    ani = animation.FuncAnimation(fig,update_image,blit=False,frames=frames,
-                                  interval=200, repeat=False,repeat_delay=500)
+    ani = animation.FuncAnimation(fig,update_image,blit=True,frames=frames,
+                                  interval=1e-5, repeat=True,repeat_delay=500)
     
     if save:
         plt.rcParams['animation.ffmpeg_path'] = os.path.join(os.getcwd(),'ffmpeg.exe')
