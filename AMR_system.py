@@ -617,7 +617,8 @@ class AMR_system(object):
                 break
         self.potentials = x[1:-1,1:-1] 
         self.errors = errors[:iteration+1]
-        self.times = times[:iteration+1]      
+        self.times = times[:iteration+1] 
+        self.last_iteration = iteration
         
     @staticmethod
     @jit(nopython=True,cache=True)
