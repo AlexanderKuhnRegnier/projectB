@@ -36,6 +36,7 @@ from AMR_system import AMR_system,Grid,build_from_segments
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from matplotlib.ticker import FormatStrFormatter
 plt.ioff()
 
 #augment original system class by adding new methods which can plot the 
@@ -57,7 +58,7 @@ class Cable(AMR_system):
         plt.title('1-D Cross-Section of the Potential across the cross section\n'
                   +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
                   format(self.tol,self.Nsx,self.Nsy,side_length))
-        grid_positions = self.grid[0][:,0]
+        grid_positions = self.grid.grid[0][:,0]
         plt.plot(grid_positions,cross_section,label='potential')
         plt.xlabel('Distance from left wall (natural units)')
         plt.ylabel('Potential (scaled V)')
@@ -76,7 +77,7 @@ class Cable(AMR_system):
                 plt.close('all')
         return cross_section
  
-    def cross_section(self,side_length=0,show=True,savepath=''):
+    def cross_section(self,side_length=0,show=True,savepath='',fit='inverse'):
         '''
         now, plot a cross section of the electric field magnitude across the 
         center. Ideally, the number of grid points should be an ODD number 
@@ -92,24 +93,39 @@ class Cable(AMR_system):
         #but internally, everythin is scaled to have a maximum value of 1,
         #so this must be done in order to find the right position on the 
         #grid.
-        radius = (2*(side_length/(2.*self.grid.size[0]))**2)**0.5
-        print('radius:',radius)
-        radius *= 1.1   #move further away from the source in order to be able
-                        #to compare the electric field to that of a free
-                        #infinite source
-        skip = np.abs(self.grid.y-(max(self.grid.y)/2.)-
-                                   radius).argmin()
-        print('mid row index:',mid_row_index)
-        print('skip:',skip)
-        cross_section = self.E_field_mag[mid_row_index,skip:]
-        
+        if fit == 'inverse':
+            radius = (2*(side_length/(2.*self.grid.size[0]))**2)**0.5
+            print('radius:',radius)
+            radius *= 1.1   #move further away from the source in order to be able
+                            #to compare the electric field to that of a free
+                            #infinite source
+            skip = np.abs(self.grid.y-(max(self.grid.y)/2.)-
+                                       radius).argmin()
+            print('mid row index:',mid_row_index)
+            print('skip:',skip)
+            
+        elif fit == 'linear':
+            skip = np.abs(self.grid.y-(max(self.grid.y)/2.)-
+                                side_length/(2.*self.grid.size[0])).argmin()
+                                
+        cross_section = self.E_field_mag[mid_row_index,skip:]                                
         #use diagonal!
 #        cross_section = np.diag(E_field_mag)
 
         plt.figure()
-        plt.title('1-D Cross-Section of the Electric Field Magnitude\n'
-                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
-                  format(self.tol,self.Nsx,self.Nsy,side_length))
+        
+#        plt.yscale('log')
+#        plt.xscale('log')
+#        plt.minorticks_on()
+#        plt.gca().xaxis.set_minor_formatter(FormatStrFormatter("%.2f"))        
+        
+#        plt.title('1-D Cross-Section of the Electric Field Magnitude\n'
+#                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
+#                  format(self.tol,self.Nsx,self.Nsy,side_length))
+
+        plt.title('error = {:.1e}, Nsx = {:.1e}, Nsy = {:.1e}, side length = {:.1e}'.
+                  format(self.errors[-1],self.Nsx,self.Nsy,side_length))                  
+                  
         grid_positions = self.grid.grid[0][:,0][skip:]*self.grid.size[0]
         print('grid positions',grid_positions.shape)
         print('cross section',cross_section.shape)
@@ -117,25 +133,37 @@ class Cable(AMR_system):
         plt.xlabel('Distance from left wall (mm)')
         plt.ylabel('Electric Field Magnitude (scaled)')
         
-        #the electric field should vary as 1/r, where r is the distance
-        #from the vertex. Therefore try to fit a curve like k/r to one side
-        #of the data, where k is a constant.
-        
-        func = lambda r,k,s:k/(r+s)
-        x = np.arange(0,cross_section.size,dtype=np.float64)
-        popt,pcov = curve_fit(func,x,cross_section,bounds=((0.1,1),(200,200)))
-        print('popt')
-        print(popt)
-        print('stds')
-        stds = np.sqrt(np.diag(pcov))
-        print(stds)
-        ratio = stds/popt
-        results = np.vstack((popt,stds,ratio))
-        float_format = lambda s : '{:0.2e}'.format(s)
-        formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
-        plt.plot(grid_positions,[func(i,*popt) for i in x],label=str(formatted))
+        if fit=='inverse':
+            #the electric field should vary as 1/r, where r is the distance
+            #from the vertex. Therefore try to fit a curve like k/r to one side
+            #of the data, where k is a constant.
+            func = lambda r,k,s:k/(r+s)
+            popt,pcov = curve_fit(func,grid_positions,cross_section)
+            print('popt')
+            print(popt)
+            print('stds')
+            stds = np.sqrt(np.diag(pcov))
+            print(stds)
+            ratio = stds/popt
+            results = np.vstack((popt,stds,ratio))
+            float_format = lambda s : '{:0.2e}'.format(s)
+            formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
+            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],label=str(formatted))
+        elif fit == 'linear':
+            #do a linear fit, if the cable is very close to the border
+            func = lambda r,m,c:m*r+c
+            popt,pcov = curve_fit(func,grid_positions,cross_section)
+            print('popt')
+            print(popt)
+            print('stds')
+            stds = np.sqrt(np.diag(pcov))
+            print(stds)
+            ratio = stds/popt
+            results = np.vstack((popt,stds,ratio))
+            float_format = lambda s : '{:0.2e}'.format(s)
+            formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
+            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],label=str(formatted))
         plt.legend()
-        
         #ymin,ymax = plt.ylim()
         #plt.ylim(ymax=ymax*1.1)
         plt.tight_layout()

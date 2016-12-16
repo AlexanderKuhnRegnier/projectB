@@ -12,19 +12,63 @@ from AMR_coaxial_cable import Cable
 plt.ioff()
 
 
+save = False
+max_time = 40
 #Plot two different systems with different side length of the 
 #source
 
-#plot the larger source first, as required by the lab script
-Ns = 300
-side_length = 20.
-grid = Grid(*build_from_segments(((1,Ns-1),)),size=(60.,60.),
-            units='mm',potential_scaling=10.)
-grid.square(1,(30.,30.),side_length)
-cable = Cable(grid)
-cable.SOR(tol=1e-14,max_iter=1e6,max_time=200,verbose=True)   
+def normal_source():
+    #plot the larger source first, as required by the lab script
+    Ns = 400
+    side_length = 20.
+    grid = Grid(*build_from_segments(((1,Ns-1),)),size=(60.,60.),
+                units='mm',potential_scaling=10.)
+    grid.square(1,(30.,30.),side_length)
+    cable = Cable(grid)
+    cable.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
+    
+    #generate figures
+    cable.show(quiver=True,every=12)
+    if save:
+        plt.savefig('coaxial_cable1.png',dpi=1000,bbox_inches='tight')
+    cable.cross_section(side_length=side_length)
+    if save:
+        plt.savefig('coaxial_cable2.png',dpi=1000,bbox_inches='tight')
 
-#%%
-cable.cross_section(side_length=side_length)
-cable.show(quiver=True,every=10)
-#%%
+def small_tube():
+    #then decrease the size of the outer tube
+    Ns = 400
+    side_length = 20.
+    grid2 = Grid(*build_from_segments(((1,Ns-1),)),size=(30.,30.),
+                units='mm',potential_scaling=10.)
+    grid2.square(1,(15.,15.),side_length)
+    cable2 = Cable(grid2)
+    
+    cable2.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
+    cable2.cross_section_potential()
+    #generate figures
+    cable2.show(quiver=True,every=12)
+    if save:
+        plt.savefig('coaxial_cable3.png',dpi=1000,bbox_inches='tight')
+    cable2.cross_section(side_length=side_length,fit='linear')
+    if save:
+        plt.savefig('coaxial_cable4.png',dpi=1000,bbox_inches='tight')
+
+def large_tube():
+    #now increase the size of the outer tube
+    Ns = 400
+    side_length = 20.
+    grid3 = Grid(*build_from_segments(((1,Ns-1),)),size=(480.,480.),
+                units='mm',potential_scaling=10.)
+    grid3.square(1,(240.,240.),side_length)
+    cable3 = Cable(grid3)
+    
+    cable3.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
+    cable3.cross_section_potential()    
+    #generate figures
+    cable3.show(quiver=True,every=10)
+    if save:
+        plt.savefig('coaxial_cable5.png',dpi=1000,bbox_inches='tight')
+    cable3.cross_section(side_length=side_length)
+    if save:
+        plt.savefig('coaxial_cable6.png',dpi=1000,bbox_inches='tight')
