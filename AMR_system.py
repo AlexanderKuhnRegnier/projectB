@@ -85,7 +85,8 @@ class Grid:
     Variable mesh sizing along the rows and column in order to 
     increase resolution locally around a specific point
     '''    
-    def __init__(self,x_h,y_h,aspect_ratio=1.,size=(1.,1.)):
+    def __init__(self,x_h,y_h,aspect_ratio=1.,size=(1.,1.),units='mm',
+                 potential_scaling = 1.):
         '''
         Pass in arrays containing the stepsizes along the x and y 
         direction.
@@ -111,7 +112,7 @@ class Grid:
         
         self.x = np.append([0.],np.cumsum(self.x_h))
         
-        self.aspect_ratio = aspect_ratio        
+        self.aspect_ratio = size[1]/size[0]        
         y_sum = np.sum(y_h)
         self.y_h = y_h / (y_sum*(1./self.aspect_ratio))
         
@@ -126,7 +127,9 @@ class Grid:
         if not hasattr(size,'__iter__'):
             self.size = (size,size) 
         else:
-            self.size = size        
+            self.size = size   
+        self.units = units
+        self.potential_scaling = potential_scaling
             
     def __str__(self):
         a='''This is a test string
@@ -135,8 +138,12 @@ class Grid:
         return a
             
     def hollow_square(self,potential,origin,length):
-        self.rectangle(potential,origin,length,length)
+        self.hollow_rectangle(potential,origin,length,length)
+        
     def hollow_rectangle(self,potential,origin,width,height):
+        width /= self.size[0]
+        height /= self.size[0]
+        origin = (origin[0]/self.size[0],origin[1]/self.size[0])        
         x = (origin[0]-width/2.,origin[0]+width/2.)
         y = (origin[1]-height/2.,origin[1]+height/2.)
         x_indices = (np.abs(self.x-x[0]).argmin(),
@@ -168,9 +175,12 @@ class Grid:
         self.source_potentials[mask] = potential      
         
     def square(self,potential,origin,length):
-        self.filled_rectangle(potential,origin,length,length)
+        self.rectangle(potential,origin,length,length)
     
     def rectangle(self,potential,origin,width,height):
+        width /= self.size[0]
+        height /= self.size[0]
+        origin = (origin[0]/self.size[0],origin[1]/self.size[0])   
         mask = ((self.x < origin[0]+width/2.)  & (self.x >= origin[0]-width/2.),
                 (self.y < origin[1]+height/2.) & (self.y >= origin[1]-height/2.) 
                )
@@ -199,6 +209,8 @@ class Grid:
         Thus, this method is not recommended for creating fine
         structures.
         '''
+        radius /= self.size[0]
+        origin = (origin[0]/self.size[0],origin[1]/self.size[0])           
         mask_whole = ((((self.grid[0]-origin[0])**2) + 
                        ((self.grid[1]-origin[1])**2)) < radius**2)
         mask_inner = ((((self.grid[0]-origin[0])**2) + 
@@ -206,9 +218,12 @@ class Grid:
         self.source_potentials[mask_whole & ~mask_inner] = potential
         
     def circle(self,potential,origin,radius):
+        radius /= self.size[0]
+        origin = (origin[0]/self.size[0],origin[1]/self.size[0])           
         mask = ((((self.grid[0]-origin[0])**2) + 
                  ((self.grid[1]-origin[1])**2)) < radius**2)
         self.source_potentials[mask] = potential
+        
     def create_grid_line_collection(self,lw=2,color=(0,0,0,0.1)):
         x_lines = np.zeros((len(self.x),2,2))
         x_lines[:,:,0] = self.x[:,None]     #all the same x
@@ -218,7 +233,7 @@ class Grid:
         y_lines[:,:,1] = self.y[:,None] #change dim to broadcast
         y_lines[:,:,0] = [0.,1.]
         
-        lines = np.vstack((x_lines,y_lines))
+        lines = np.vstack((x_lines,y_lines))*self.size[0]
         grid_lines = LineCollection(lines,lw=lw,color=color)
         return grid_lines
                
@@ -248,7 +263,8 @@ class Grid:
         y_bounds = np.append([-self.y_h[0]/2.],
                              self.y+np.append(self.y_h,[self.y_h[-1]])/2.)        
         fig,ax = plt.subplots()
-        plot = ax.pcolorfast(x_bounds,y_bounds,self.source_potentials.T)        
+        plot = ax.pcolorfast(x_bounds,y_bounds,
+                             self.source_potentials.T*self.potential_scaling)        
         grid_lines = self.create_grid_line_collection(**kwargs)
         ax.add_collection(grid_lines) 
         fig.colorbar(plot)
@@ -282,7 +298,7 @@ class AMR_system(object):
     #use properties to get the electric field and its magnitude,
     #since the electric field would only have to be re-calculated
     #if the potential has changed
-    def get_E_field(self):
+    def __get_E_field(self):
         if hasattr(self,'_AMR_system__past_potentials'):
             if not np.all(self.__past_potentials == self.potentials):
                 self.calculate_E_field()
@@ -293,9 +309,9 @@ class AMR_system(object):
             self.__past_potentials = self.potentials
             return self._E_field
             
-    E_field = property(fget=get_E_field)
+    E_field = property(fget=__get_E_field)
     
-    def get_E_field_mag(self):
+    def __get_E_field_mag(self):
         if hasattr(self,'_AMR_system__past_potentials'):
             if not np.all(self.__past_potentials == self.potentials):
                 self.calculate_E_field()
@@ -306,7 +322,7 @@ class AMR_system(object):
             self.__past_potentials = self.potentials
             return self._E_field_magnitude       
     
-    E_field_mag = property(fget=get_E_field_mag)
+    E_field_mag = property(fget=__get_E_field_mag)
     
     def create_matrix(self):
         N = self.Nsx*self.Nsy   #works for rectangular setup as well
@@ -422,6 +438,7 @@ class AMR_system(object):
         #randomise starting potential
         
         start = clock()
+        max_iter = int(max_iter)
         for i in range(max_iter):
             x = T.dot(x).reshape(-1,) # + D_inv_b all 0s
             x[sources] = orig_x[sources]
@@ -455,6 +472,7 @@ class AMR_system(object):
         #get diagonal, D
         D = self.A.diagonal()
         start = clock()
+        max_iter = int(max_iter)
         for iteration in xrange(max_iter):
             #need to use 'extended' step size array, since the 
             #boundary conditions are being used here as well
@@ -547,7 +565,8 @@ class AMR_system(object):
         #randomise starting potential
 #        print('T',type(T))
         start = clock()        
-        for i in range(max_iter):
+        max_iter = int(max_iter)
+        for i in xrange(max_iter):
             x = T.dot(x).reshape(-1,) # + L_D_inv_b
             x[sources] = orig_x[sources]
             error = np.linalg.norm(self.A.dot(x)[inv_sources])   
@@ -561,7 +580,7 @@ class AMR_system(object):
                 break
         self.potentials = x.reshape(self.Nsx, -1)        
         
-    def SOR(self, w=1.5, tol=1e-2, max_iter=1000000, max_time=10, verbose=True):
+    def SOR(self, w=None, tol=1e-2, max_iter=1000000, max_time=10, verbose=True):
         '''
         A = L + D + U
         A x = b - b are the boundary conditions
@@ -574,7 +593,23 @@ class AMR_system(object):
 
         D is of length N^2, every element is -4, N is the number of gridpoints
         '''        
-        self.w = float(w)
+        if not w:
+            avg_Ns = (self.Nsx+self.Nsy)/2.
+            avg_h = 1./avg_Ns
+            #assign ideal relaxation parameter
+            w = 2./(1+np.sin(np.pi*avg_h))
+            #however, this only holds for a square grid
+            if self.Nsx != self.Nsy:
+                #better to overestimate so increase
+                w *= 1.05
+                #do not increase too much, otherwise the SOR method
+                #might become unstable
+                if w>1.99:
+                    w = 1.99
+        
+        self.w = w
+        max_iter = int(max_iter)
+        self.tol = tol
         sources = self.sources
         inv_source_mask = ~(sources.reshape(-1,1))
         '''
@@ -595,6 +630,8 @@ class AMR_system(object):
         errors = np.zeros(max_iter,dtype=np.float64)
         times  = np.zeros(max_iter,dtype=np.float64)
         start = clock()
+        increasing_error_count = -1 #will catch first time,
+        #since -1th element is initialised to 0
         for iteration in xrange(max_iter):
             #need to use 'extended' step size array, since the 
             #boundary conditions are being used here as well
@@ -612,6 +649,11 @@ class AMR_system(object):
             if error < tol:
                 print('Error in potential lower than tolerance')
                 break
+            if errors[iteration-1] < error:
+                increasing_error_count += 1
+                if increasing_error_count == 10:
+                    print('Error has increased 10 times')
+                    break
             if time_diff > max_time:
                 print('Time limit exceed')
                 break
@@ -723,7 +765,8 @@ class AMR_system(object):
         self.potentials = (x_potentials+y_potentials)/2.
         self.potentials[self.sources] = self.grid.source_potentials[self.sources]
         
-    def show(self,title='',quiver=False,**kwargs):
+    def show(self,title='',grid_lines=True,
+             quiver=False,every=1,**kwargs):
         '''
         Need to supply coordinates of 'bounding' boxes for the assigned
         potentials, ie.
@@ -735,7 +778,7 @@ class AMR_system(object):
         representation?
         '''
         '''
-        Creat list, where the first x_bound is interpolated backwards from x0
+        Create list, where the first x_bound is interpolated backwards from x0
         by a step half the size of the first step size h0. The remainder of
         the bounds are calculated by adding half of the step size to the
         corresponding x-positions, where the last step size is duplicated in
@@ -749,24 +792,62 @@ class AMR_system(object):
         '''
         y_bounds = np.append([-self.grid.y_h[0]/2.],
                              self.grid.y+np.append(self.grid.y_h,
-                                                   [self.grid.y_h[-1]])/2.)        
+                                                   [self.grid.y_h[-1]])/2.)    
+        x_bounds *= self.grid.size[0]
+        y_bounds *= self.grid.size[1]
         fig,ax = plt.subplots()
-        plot = ax.pcolorfast(x_bounds,y_bounds,self.potentials.T)      
-        grid_lines = self.grid.create_grid_line_collection(**kwargs)
-        ax.add_collection(grid_lines) 
-        fig.colorbar(plot)
+        print('shapes:',x_bounds.shape,y_bounds.shape,self.potentials.T.shape)
+        plot = ax.pcolorfast(x_bounds,y_bounds,
+                             self.potentials.T*self.grid.potential_scaling)      
+        if grid_lines:
+            ax.add_collection(self.grid.create_grid_line_collection(**kwargs)) 
+        if quiver:
+            U,V = self.E_field
+            mags = self.E_field_mag
+            U = -U.T
+            V = -V.T        
+            X,Y = np.meshgrid(self.grid.x*self.grid.size[0],
+                              self.grid.y*self.grid.size[0])   
+            plt.quiver(X[::every,::every],Y[::every,::every],
+                       U[::every,::every],V[::every,::every])
+        cb = fig.colorbar(plot)
         plt.axis('square')
         plt.autoscale()
         if title:
             plt.title(title)
+        cb.set_label('Potential (Scaled)')
+        ax.set_xlabel('x ({:})'.format(self.grid.units))
+        ax.set_ylabel('y ({:})'.format(self.grid.units))
         plt.show()
+        
+    def streamplot(self,title='',**fargs):
+        plt.figure()
+        U,V = self.E_field
+        fields = self.E_field_mag
+        U = -U.T
+        V = -V.T        
+        X,Y = np.meshgrid(self.grid.x*self.grid.size[0],
+                          self.grid.y*self.grid.size[0])
+        lw = 8*fields.T/np.max(fields)
+        plt.streamplot(X, Y, U, V,
+                       density = [1,1],
+                       color = self.potentials.T,
+                       linewidth = lw)
+        if title:
+            plt.title(title)
+        plt.tight_layout() 
+        plt.axis('tight')
+        plt.colorbar()           
+        plt.show()        
         
     def show_setup(self):
         self.grid.show()
         
     def calculate_E_field(self):
         print('calculating e field')
-        self._E_field = gradient(self.potentials,self.grid.x_h,self.grid.y_h)
+        self._E_field = gradient(self.potentials*self.grid.potential_scaling,
+                                 self.grid.x_h*self.grid.size[0],
+                                 self.grid.y_h*self.grid.size[0])
         self._E_field_magnitude = np.sqrt(self._E_field[0]**2 + 
                                          self._E_field[1]**2)
     

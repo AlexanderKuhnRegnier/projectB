@@ -600,7 +600,7 @@ class System:
         if title:
             plt.title(title)        
         plt.show()
-    def streamplot(self,title='',**frags):
+    def streamplot(self,title='',**fargs):
         plt.figure()
         U,V = np.gradient(self.potentials)
         fields = np.sqrt(U**2+V**2)

@@ -33,7 +33,8 @@ def create_EDM_system(Ns,kx,ky=None,size=(1.,1.),dust_pos=None,
     #The grid building function takes as input the number of STEPS, which 
     #is 1 less than the number of grid points, which are specified using *Ns*
     xh,yh = build_from_segments(((1,Ns[0]-1),),((1,Ns[1]-1),))
-    grid = Grid(xh,yh,aspect_ratio = float(Ns[1])/Ns[0],size=size)
+    grid = Grid(xh,yh,aspect_ratio = float(Ns[1])/Ns[0],size=size,
+                potential_scaling = 8000)
     #compute parameters for shape creation based on padding selected using
     #*kx* and *ky* as well as the known shape ratios.
     
