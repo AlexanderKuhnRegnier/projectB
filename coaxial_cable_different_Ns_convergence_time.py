@@ -121,7 +121,7 @@ plt.minorticks_on()
 plt.grid()
 plt.show()
 
-#plt.savefig('iter_vs_Ns.pdf',bbox_inches='tight')
+#plt.savefig('iter_vs_Ns_800Ns_SOR.pdf',bbox_inches='tight')
 
 #%%
 ###
@@ -138,35 +138,37 @@ markers = ['>','D']
 markevery = 1       
 ms = 15
 lw = 5
-positions = ((0.1,0.3),(0.7,0.6))
+positions = ((0.1,0.3),(0.65,0.6))
 for tol,last_iters,c,marker,ls,pos in zip(tolerances,tot_last_iters,colours,markers,
                                    linestyles,positions):
-    plt.plot(grid_spacings,last_iters,lw=lw,c=c,marker=marker,markevery=markevery,
+    plt.plot(np.log(grid_spacings),np.log(last_iters),lw=lw,c=c,marker=marker,markevery=markevery,
              ls=ls,ms=ms,label='$\mathrm{tol=%.1e}$'%tol,
              markeredgecolor='k',markeredgewidth=1.2)
     
     #do linear fit for each dataset
-    p,V = np.polyfit(np.log(grid_spacings),np.log(last_iters),deg=1,cov=True)
+    p,V = np.polyfit(np.log(grid_spacings[-len(grid_spacings)/2:]),
+                     np.log(last_iters[-len(grid_spacings)/2:]),deg=1,cov=True)
     stds = np.sqrt(np.diag(V))
     print('parameters:',p)
     print('errors    :',stds)
     ax = plt.gca()
     fitted = np.polyval(p,np.log(grid_spacings))
-    plt.plot(grid_spacings,np.exp(fitted),ls ='--', c='k',lw=4,zorder=2)
+    plt.plot(np.log(grid_spacings),fitted,ls ='--', c='k',lw=4,zorder=2)
     text = plt.text(pos[0],pos[1],(r'$\mathrm{I=k \times h^{d},}$'+'\n'+
-        r'$\mathrm{d= %.2f \pm %.2f}$'+'\n'+r'$\mathrm{k= %.2f \pm %.2f}$')%
+        r'$\mathrm{d= %.2f \pm %.2f}$'+'\n'+r'$\mathrm{ln(k)= %.2f \pm %.2f}$')%
         (p[0],stds[0],p[1],stds[1]),
         transform=ax.transAxes,
         fontdict={'fontsize':16},
         bbox=dict(facecolor='white', edgecolor='black'))
 
-plt.xlabel('$\mathrm{Grid\ Spacing,\ h \ (m)}$',
+plt.xlabel('$\mathrm{ln(grid\ spacing/1 \ metre),\ ln(h / 1\ m)}$',
                       fontsize=17)
-plt.ylabel(r'$\mathrm{Number\ of\ Iterations,\ I}$',
+plt.ylabel(r'$\mathrm{ln(number\ of\ iterations),\ ln(I)}$',
                       fontsize=17)  
 
-plt.yscale('log',base='e')
-plt.xscale('log',base='e')
+#plt.yscale('log',base='e')
+#plt.xscale('log',base='e')
+
 #plt.axis('tight')
 plt.margins(0.05)
 leg = plt.legend(loc='best')
@@ -188,12 +190,12 @@ def minor_x_formatter(value,pos):
         return '$\mathrm{%.0e}$'%value
     else:
         return ''
-plt.gca().xaxis.set_minor_formatter(FuncFormatter(minor_x_formatter))
+#plt.gca().xaxis.set_minor_formatter(FuncFormatter(minor_x_formatter))
 plt.grid()
 plt.tight_layout()
 plt.show()
 
-#plt.savefig('iter_vs_h.pdf',bbox_inches='tight')
+#plt.savefig('iter_vs_h_800Ns_last_half_fit_SOR.pdf',bbox_inches='tight')
 #%%
 
 
@@ -212,7 +214,7 @@ markevery = 1
 ms = 12
 lw = 5
 dec_places = 4
-positions = ((0.59,0.09),(0.04,0.6))
+positions = ((0.59,0.15),(0.03,0.65))
 for tol,last_iters,c,marker,ls,pos in zip(tolerances,tot_last_iters,colours,markers,
                                    linestyles,positions):
     plt.plot(Ns_array**2,last_iters,lw=lw,c=c,marker=marker,markevery=markevery,
@@ -267,8 +269,10 @@ plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0
 plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
 plt.minorticks_on()
 plt.grid()
-plt.show()
 plt.tight_layout()
-#plt.savefig('iter_vs_Ns.pdf',bbox_inches='tight')
+plt.show()
+
+
+#plt.savefig('iter_vs_N_800Ns_SOR_last_half_fit.pdf',bbox_inches='tight')
 
 #%%
