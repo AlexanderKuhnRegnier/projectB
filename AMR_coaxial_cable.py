@@ -50,21 +50,23 @@ class Cable(AMR_system):
         '''
         #use middle row!
         mid_row_index = int((self.Nsx-1)/2.)
-        cross_section = self.potentials[mid_row_index]
+        cross_section = self.potentials[mid_row_index]*self.grid.potential_scaling
         
         #use diagonal!
 #        cross_section = np.diag(self.potentials)
         plt.figure()
-        plt.title('1-D Cross-Section of the Potential across the cross section\n'
-                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
-                  format(self.tol,self.Nsx,self.Nsy,side_length))
-        grid_positions = self.grid.grid[0][:,0]
+        plt.title(r'$\epsilon = %.1e,\ \mathrm{Nsx} = %.1e,\ \mathrm{Nsy} = %.1e,\ \mathrm{L} = %.1e$' %
+                  (self.errors[-1],self.Nsx,self.Nsy,side_length),fontsize=18)                  
+                                     
+        grid_positions = self.grid.grid[0][:,0]*self.grid.distance_factor
         plt.plot(grid_positions,cross_section,label='potential')
-        plt.xlabel('Distance from left wall (natural units)')
-        plt.ylabel('Potential (scaled V)')
+        plt.xlabel(r'$\mathrm{x\ (m)}$',
+                              fontsize=16)
+        plt.ylabel(r'$\mathrm{Potential\ (V)}$',
+                              fontsize=16)
     #    plt.legend()
         ymin,ymax = plt.ylim()
-        plt.ylim(ymax=ymax*1.1)
+        plt.ylim(ymax=ymax*1.08)
         plt.tight_layout()
         
         if savepath:
@@ -123,15 +125,17 @@ class Cable(AMR_system):
 #                  +'tol = {:.2e}, Nsx = {:.2e}, Nsy = {:.2e}, side length = {:.3e}'.
 #                  format(self.tol,self.Nsx,self.Nsy,side_length))
 
-        plt.title('error = {:.1e}, Nsx = {:.1e}, Nsy = {:.1e}, side length = {:.1e}'.
-                  format(self.errors[-1],self.Nsx,self.Nsy,side_length))                  
-                  
-        grid_positions = self.grid.grid[0][:,0][skip:]*self.grid.size[0]
+        plt.title(r'$\epsilon = %.1e,\ \mathrm{Nsx} = %.1e,\ \mathrm{Nsy} = %.1e,\ \mathrm{L} = %.1e$' %
+                  (self.errors[-1],self.Nsx,self.Nsy,side_length),fontsize=18)                  
+                                   
+        grid_positions = self.grid.grid[0][:,0][skip:]*self.grid.distance_factor
         print('grid positions',grid_positions.shape)
         print('cross section',cross_section.shape)
         plt.plot(grid_positions,cross_section,label='electric field magnitude')
-        plt.xlabel('Distance from left wall (mm)')
-        plt.ylabel('Electric Field Magnitude (scaled)')
+        plt.xlabel(r'$\mathrm{x\ (m)}$',
+                              fontsize=16)
+        plt.ylabel(r'$\mathrm{Electric\ Field\ Magnitude\ (V\ m^{-1})}$',
+                              fontsize=16)
         
         if fit=='inverse':
             #the electric field should vary as 1/r, where r is the distance
@@ -148,7 +152,8 @@ class Cable(AMR_system):
             results = np.vstack((popt,stds,ratio))
             float_format = lambda s : '{:0.2e}'.format(s)
             formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
-            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],label=str(formatted))
+            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
+                                     label=str(formatted),linestyle='--')
         elif fit == 'linear':
             #do a linear fit, if the cable is very close to the border
             func = lambda r,m,c:m*r+c
@@ -162,7 +167,8 @@ class Cable(AMR_system):
             results = np.vstack((popt,stds,ratio))
             float_format = lambda s : '{:0.2e}'.format(s)
             formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
-            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],label=str(formatted))
+            plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
+                                     label=str(formatted),linestyle='--')
         plt.legend()
         #ymin,ymax = plt.ylim()
         #plt.ylim(ymax=ymax*1.1)

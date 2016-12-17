@@ -129,6 +129,8 @@ class Grid:
         else:
             self.size = size   
         self.units = units
+        self.distance_units_SI = {'mm':1e-3,'cm':1e-2,'m':1.,'um':1e-6}
+        self.distance_factor = self.size[0]*self.distance_units_SI[self.units]
         self.potential_scaling = potential_scaling
             
     def __str__(self):
@@ -233,7 +235,7 @@ class Grid:
         y_lines[:,:,1] = self.y[:,None] #change dim to broadcast
         y_lines[:,:,0] = [0.,1.]
         
-        lines = np.vstack((x_lines,y_lines))*self.size[0]
+        lines = np.vstack((x_lines,y_lines))*self.distance_factor
         grid_lines = LineCollection(lines,lw=lw,color=color)
         return grid_lines
                
@@ -261,15 +263,21 @@ class Grid:
         Repeat for the y axis
         '''
         y_bounds = np.append([-self.y_h[0]/2.],
-                             self.y+np.append(self.y_h,[self.y_h[-1]])/2.)        
+                             self.y+np.append(self.y_h,[self.y_h[-1]])/2.)    
+        x_bounds *= self.distance_factor
+        y_bounds *= self.distance_factor
+        print(x_bounds)
         fig,ax = plt.subplots()
         plot = ax.pcolorfast(x_bounds,y_bounds,
                              self.source_potentials.T*self.potential_scaling)        
         grid_lines = self.create_grid_line_collection(**kwargs)
         ax.add_collection(grid_lines) 
-        fig.colorbar(plot)
+        cb = fig.colorbar(plot)
         plt.axis('square')
         plt.autoscale()
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)        
         plt.show()
         
 class AMR_system(object):
@@ -651,8 +659,8 @@ class AMR_system(object):
                 break
             if errors[iteration-1] < error:
                 increasing_error_count += 1
-                if increasing_error_count == 10:
-                    print('Error has increased 10 times')
+                if increasing_error_count == 50:
+                    print('Error has increased 50 times')
                     break
             if time_diff > max_time:
                 print('Time limit exceed')
@@ -793,8 +801,8 @@ class AMR_system(object):
         y_bounds = np.append([-self.grid.y_h[0]/2.],
                              self.grid.y+np.append(self.grid.y_h,
                                                    [self.grid.y_h[-1]])/2.)    
-        x_bounds *= self.grid.size[0]
-        y_bounds *= self.grid.size[1]
+        x_bounds *= self.grid.distance_factor
+        y_bounds *= self.grid.distance_factor
         fig,ax = plt.subplots()
         print('shapes:',x_bounds.shape,y_bounds.shape,self.potentials.T.shape)
         plot = ax.pcolorfast(x_bounds,y_bounds,
@@ -804,20 +812,23 @@ class AMR_system(object):
         if quiver:
             U,V = self.E_field
             mags = self.E_field_mag
-            U = -U.T
-            V = -V.T        
-            X,Y = np.meshgrid(self.grid.x*self.grid.size[0],
-                              self.grid.y*self.grid.size[0])   
+#            U = -U.T
+#            V = -V.T
+#            X,Y = np.meshgrid(self.grid.x*self.grid.distance_factor,
+#                              self.grid.y*self.grid.distance_factor)   
+
+            X,Y = (self.grid.grid[0]*self.grid.distance_factor,
+                   self.grid.grid[1]*self.grid.distance_factor)
             plt.quiver(X[::every,::every],Y[::every,::every],
                        U[::every,::every],V[::every,::every])
         cb = fig.colorbar(plot)
         plt.axis('square')
-        plt.autoscale()
+        plt.autoscale('tight')
         if title:
             plt.title(title)
-        cb.set_label('Potential (Scaled)')
-        ax.set_xlabel('x ({:})'.format(self.grid.units))
-        ax.set_ylabel('y ({:})'.format(self.grid.units))
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)
         plt.show()
         
     def streamplot(self,title='',**fargs):
@@ -837,7 +848,11 @@ class AMR_system(object):
             plt.title(title)
         plt.tight_layout() 
         plt.axis('tight')
-        plt.colorbar()           
+        cb = plt.colorbar() 
+        ax = plt.gca()
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
+        ax.set_xlabel(r'\mathrm{x\ (m)}',fontsize=16)
+        ax.set_ylabel(r'\mathrm{y\ (m)}',fontsize=16)          
         plt.show()        
         
     def show_setup(self):
@@ -846,8 +861,10 @@ class AMR_system(object):
     def calculate_E_field(self):
         print('calculating e field')
         self._E_field = gradient(self.potentials*self.grid.potential_scaling,
-                                 self.grid.x_h*self.grid.size[0],
-                                 self.grid.y_h*self.grid.size[0])
+                                 self.grid.x_h*self.grid.distance_factor,
+                                 self.grid.y_h*self.grid.distance_factor)
+        self._E_field[0] *= -1
+        self._E_field[1] *= -1
         self._E_field_magnitude = np.sqrt(self._E_field[0]**2 + 
                                          self._E_field[1]**2)
     
@@ -949,7 +966,7 @@ if __name__ == '__main__':
 #    xh,yh = build_from_segments(((0.1,0.01),(0.25,0.005),(1,0.01)),
 #                                ((0.35,0.01),(0.45,0.005),(1,0.01))
 #                               )
-    xh,yh = build_from_segments(((1,50),))
+    xh,yh = build_from_segments(((1,50),),((1,200),))
     test = Grid(xh,yh)
     test.rectangle(1,(0.5,0.5),0.4,0.7)
     test.rectangle(1,(0.2,0.4),0.02,0.02)
@@ -958,6 +975,6 @@ if __name__ == '__main__':
 
 #    system.SOR(max_iter=10000,max_time=1,tol=1e-10,verbose=True)
 #    system.iterative_jacobi()
-    system.jacobi(max_time=2)
+    system.SOR(max_time=1,verbose=False)
 #    system.gauss_seidel()
-    system.show()
+    system.show(quiver=True,every=5)

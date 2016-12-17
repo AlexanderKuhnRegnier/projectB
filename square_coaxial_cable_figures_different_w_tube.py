@@ -12,8 +12,8 @@ from AMR_coaxial_cable import Cable
 plt.ioff()
 
 
-save = False
-max_time = 40
+save = True
+max_time = 100
 #Plot two different systems with different side length of the 
 #source
 
@@ -26,14 +26,16 @@ def normal_source():
     grid.square(1,(30.,30.),side_length)
     cable = Cable(grid)
     cable.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
-    
     #generate figures
+    cable.cross_section_potential(side_length=side_length)
+    if save:
+        plt.savefig('normal_tube_coaxial_cable_potential_cross.pdf',bbox_inches='tight')    
     cable.show(quiver=True,every=12)
     if save:
-        plt.savefig('coaxial_cable1.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('normal_coaxial_cable_overview.pdf',bbox_inches='tight')
     cable.cross_section(side_length=side_length)
     if save:
-        plt.savefig('coaxial_cable2.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('normal_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
 
 def small_tube():
     #then decrease the size of the outer tube
@@ -45,14 +47,16 @@ def small_tube():
     cable2 = Cable(grid2)
     
     cable2.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
-    cable2.cross_section_potential()
     #generate figures
+    cable2.cross_section_potential(side_length=side_length)
+    if save:
+        plt.savefig('small_tube_coaxial_cable_potential_cross.pdf',bbox_inches='tight')
     cable2.show(quiver=True,every=12)
     if save:
-        plt.savefig('coaxial_cable3.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('small_tube_coaxial_cable_overview.pdf',bbox_inches='tight')
     cable2.cross_section(side_length=side_length,fit='linear')
     if save:
-        plt.savefig('coaxial_cable4.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('small_tube_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
 
 def large_tube():
     #now increase the size of the outer tube
@@ -62,13 +66,20 @@ def large_tube():
                 units='mm',potential_scaling=10.)
     grid3.square(1,(240.,240.),side_length)
     cable3 = Cable(grid3)
-    
     cable3.SOR(tol=1e-14,max_iter=1e6,max_time=max_time,verbose=True)   
-    cable3.cross_section_potential()    
     #generate figures
+    cable3.cross_section_potential(side_length=side_length) 
+    if save:
+        plt.savefig('large_tube_coaxial_cable_potential_cross.pdf',bbox_inches='tight')        
+
     cable3.show(quiver=True,every=10)
     if save:
-        plt.savefig('coaxial_cable5.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('large_tube_coaxial_cable_overview.pdf',bbox_inches='tight')
     cable3.cross_section(side_length=side_length)
     if save:
-        plt.savefig('coaxial_cable6.png',dpi=1000,bbox_inches='tight')
+        plt.savefig('large_tube_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
+
+def execute_all():
+    normal_source()
+    small_tube()
+    large_tube()

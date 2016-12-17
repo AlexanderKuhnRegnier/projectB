@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 plt.close('all')
 xh,yh = build_from_segments(x=((0.5,1),(1,5)),
 y=((0.5,1),(1,3)))
-test = Grid(xh,yh)
+test = Grid(xh,yh,units='m')
 #test.show()
 collection = test.create_grid_line_collection(color=(0,0,0,1))
 fig,ax = plt.subplots()
@@ -18,8 +18,8 @@ ax.axis('square')
 ax.set_ylim(-0.17,1.1)
 ax.set_xlim(-0.2,1.1)
 
-ax.set_xlabel(r'$x$',fontsize=20)
-ax.set_ylabel(r'$y$',fontsize=20)
+ax.set_xlabel(r'$\mathrm{x\ (arbitrary\ units)}$',fontsize=20)
+ax.set_ylabel(r'$\mathrm{y\ (arbitrary\ units)}$',fontsize=20)
 
 height_x = -0.03
 height_x_text = -0.12
@@ -58,4 +58,4 @@ plt.annotate(
 
 
 plt.show()
-fig.savefig('non_uniform_grid.png',dpi=1000,bbox_inches='tight')
+fig.savefig('non_uniform_grid.pdf',bbox_inches='tight')
