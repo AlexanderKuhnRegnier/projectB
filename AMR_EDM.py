@@ -70,20 +70,38 @@ def create_EDM_system_from_grid(grid,kx,ky=None,size=(1.,1.),dust_pos=None,
 #    print('size',size)
 #    print('A',A)
     
-    grid.rectangle(1., (Sx+13.*hx,Sy+5.*hy/2.),20*hx,hy)
+    grid.rectangle(1., ((Sx+13.*hx)*size[0],
+                        (Sy+5.*hy/2.)*size[0]),
+                   20*hx*size[0],hy*size[0])
     
-    grid.rectangle(-1.,(Sx+13.*hx,Sy+hy/2.),   20*hx,hy)
+    grid.rectangle(-1.,((Sx+13.*hx)*size[0],
+                        (Sy+hy/2.)*size[0]),
+                        20*hx*size[0],
+                        hy*size[0])
     
     if small_sources:    
-        grid.rectangle(0.25, (Sx+hx,    Sy+5.*hy/2.),2*hx,hy)                           
-        grid.rectangle(0.25, (Sx+25.*hx,Sy+5.*hy/2.),2*hx,hy)                                
-        grid.rectangle(-0.25,(Sx+hx,    Sy+hy/2.),   2*hx,hy)
-        grid.rectangle(-0.25,(Sx+25.*hx,Sy+hy/2.),   2*hx,hy)
+        grid.rectangle(0.25, ((Sx+hx)*size[0],
+                              (Sy+5.*hy/2.)*size[0]),
+                                2*hx*size[0],
+                                hy*size[0])                           
+        grid.rectangle(0.25, ((Sx+25.*hx)*size[0],
+                              (Sy+5.*hy/2.)*size[0]),
+                                2*hx*size[0],
+                                hy*size[0])                                
+        grid.rectangle(-0.25,((Sx+hx)*size[0],
+                              (Sy+hy/2.)*size[0]),
+                                2*hx*size[0],
+                                hy*size[0])
+        grid.rectangle(-0.25,((Sx+25.*hx)*size[0],
+                              (Sy+hy/2.)*size[0]),   
+                                2*hx*size[0],
+                                hy*size[0])
                      
     system = AMR_system(grid)        
 #    system.show_setup()
 #    print(system.Nsx,system.Nsy)
     dust_tuple = ()
+    position = ()
     if dust_pos:
         if not hasattr(dust_size,'__iter__'):
             dust_size = (dust_size,dust_size)  
@@ -136,8 +154,11 @@ def create_EDM_system_from_grid(grid,kx,ky=None,size=(1.,1.),dust_pos=None,
         #We are only interested in placing the dust particle
         #on the top sources, since the setup is symmetric
         
+#        print('dust pos',dust_pos)
+#        print('scaled dust pos',scaled_dust_pos)
 #        print('lowest x grid',lowest_x_grid)
 #        print('top x grid',highest_x_grid)
+#        print('max x grid',system.grid.x.size)
 #        print('top dust grid',top_dust_grid)
 #        print('max y grid',system.grid.y.size)
         
@@ -163,11 +184,12 @@ def create_EDM_system_from_grid(grid,kx,ky=None,size=(1.,1.),dust_pos=None,
                        system.grid.y[bottom_dust_grid]
                        +system.grid.y_h[bottom_dust_grid-1]/2.
                        +system.grid.y_h[top_dust_grid]/2.)*size[0])
-    return system,dust_tuple,(system.grid.grid[0][lowest_x_grid,top_dust_grid],
+        position = (system.grid.grid[0][lowest_x_grid,top_dust_grid],
                               system.grid.grid[1][lowest_x_grid,top_dust_grid])
+    return system,dust_tuple,position
   
 if __name__ == '__main__':
-    factor = 100
+    factor = 10
     k = 1.
     #with k=1, and a dust size of 0.1 mm (100e-6 m),
     #the factor has to be at least 300 in order to be able to
@@ -178,5 +200,5 @@ if __name__ == '__main__':
                              dust_size=1e-1)
     test.show_setup()
     print('Dust Size:',dust_size)
-    test.SOR(w=1.5,tol=1e-10,max_time=10)
-    test.show(quiver=False)
+#    test.SOR(w=1.5,tol=1e-10,max_time=10)
+#    test.show(quiver=False)

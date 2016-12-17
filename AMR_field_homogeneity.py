@@ -15,16 +15,16 @@ import os
 plt.ioff()
 from AMR_EDM import create_EDM_system
 from AMR_system import gradient
-
-factor = 150
+from matplotlib.ticker import FuncFormatter
+factor = 200
 k = 0.9
+size = (260*(1+2*k),30*(1+2*k))
 system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
-                                     size=(260*(1+2*k),30*(1+2*k)),
+                                     size=size,
                                      small_sources=True,
-                                     dust_pos=300,
-                                     dust_size=2.)
+                                     dust_pos=None)
 #system.show_setup()
-system.SOR(w=1.9,tol=1e-10,max_time=100)
+system.SOR(tol=1e-16,max_time=1000)
 #system.show()
 print('dust size:',dust_size)
 
@@ -47,17 +47,44 @@ E_field_mag = system.E_field_mag
 #is relatively small, this should not have a large effect, especially
 #as the grid spacing is decreased
 
+#%%
 central_value = E_field_mag[tuple((np.asarray(E_field_mag.shape))/2)]
-                      
+distances = system.grid.x*system.grid.distance_factor
 beam_path = E_field_mag[:,system.potentials.shape[1]/2]
+
 plt.figure()
-plt.plot(np.linspace(0,system.grid.size[0],len(beam_path)),beam_path)
-plt.title('Electric Field Magnitude along Electron Beam Path')
-plt.xlabel('x gridpoints')
-plt.ylabel('electric field magnitude')
+plt.plot(distances,beam_path)
+plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
 plt.autoscale(enable=True, axis='x', tight=True)
+
+plt.gca().tick_params(axis='both',which='major', labelsize=16)
+plt.gca().tick_params(axis='both',which='minor', labelsize=16)
+plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
+plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+plt.minorticks_on()
+plt.tight_layout()
 plt.show()
 
+plt.savefig('EDM_e_mag_cross_section.pdf',bbox_inches='tight')
+
+mask = (distances<0.453) & (distances>0.274)
+plt.figure()
+plt.plot(distances[mask],beam_path[mask])
+plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
+plt.autoscale(enable=True, axis='x', tight=True)
+
+plt.gca().tick_params(axis='both',which='major', labelsize=16)
+plt.gca().tick_params(axis='both',which='minor', labelsize=16)
+plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.3e}$'%value))
+plt.minorticks_on()
+plt.tight_layout()
+plt.show()
+
+plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
+#%%
 
 #%%
 #tolerances = [0.01,1e-11]
@@ -85,7 +112,7 @@ for tol in tolerances:
     section_starts = sections[0:-1]
     section_ends = sections[1:]
     section_lengths = (system.grid.x[section_ends-1]-
-                       system.grid.x[section_starts])*system.grid.size[0]
+                       system.grid.x[section_starts])*system.grid.distance_factor
 #    print ('section lengths:',section_lengths)                       
     longest.append(max(section_lengths))
 #    print('tol:',tol)
@@ -103,11 +130,25 @@ for tol in tolerances:
 #        plt.ylabel('electric field magnitude')
 #        plt.autoscale(enable=True, axis='x', tight=True)
 #        plt.show()
+#%%
 
+#%%
 plt.figure()
-plt.plot(tolerances,longest)
-plt.xlabel('tol')
-plt.ylabel('length')
-plt.title('Length of longest contiguous region')
+
+#colours =  ['#e41a1c','#377eb8','#4daf4a']
+colours =  ['#e41a1c','#377eb8']
+#linestyles = [':','--','-.']
+linestyles = ['','']
+#markers = ['>','^','D']
+markers = ['>','D']
+markevery = 0.1     
+ms = 12
+lw = 5
+
+plt.plot(tolerances,longest,c=colours[1])
+plt.xlabel(r'$\mathrm{tolerance}$',fontsize=16)
+plt.ylabel(r'$\mathrm{homogeneous\ section\ length\ (m)}$',fontsize=16)
+
 plt.show()
 #%%
+print('dust size:',dust_size)
