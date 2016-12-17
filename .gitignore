@@ -90,6 +90,7 @@ ENV/
 
 #images
 *.png
+*.pdf
 
 #executables
 *.exe

@@ -106,7 +106,7 @@ class Cable(AMR_system):
             print('mid row index:',mid_row_index)
             print('skip:',skip)
             
-        elif fit == 'linear':
+        else:
             skip = np.abs(self.grid.y-(max(self.grid.y)/2.)-
                                 side_length/(2.*self.grid.size[0])).argmin()
                                 
@@ -154,6 +154,7 @@ class Cable(AMR_system):
             formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
             plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
                                      label=str(formatted),linestyle='--')
+            plt.legend()            
         elif fit == 'linear':
             #do a linear fit, if the cable is very close to the border
             func = lambda r,m,c:m*r+c
@@ -169,7 +170,7 @@ class Cable(AMR_system):
             formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
             plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
                                      label=str(formatted),linestyle='--')
-        plt.legend()
+            plt.legend()
         #ymin,ymax = plt.ylim()
         #plt.ylim(ymax=ymax*1.1)
         plt.tight_layout()

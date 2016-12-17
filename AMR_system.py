@@ -646,9 +646,12 @@ class AMR_system(object):
             x = self.SOR_sub_func(x, Ns_array,
                                   sources,w,D,self.grid.x_h_extended,
                                   self.grid.y_h_extended)
+            
             error = np.linalg.norm(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
                                                        [inv_source_mask])
-            
+  
+#            error = np.mean(np.abs(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
+#                                                       [inv_source_mask]))        
             errors[iteration] = error
             time_diff = clock()-start
             times[iteration]  = time_diff
@@ -715,9 +718,11 @@ class AMR_system(object):
         return x
         
     def interpolate(self,other):
-        #calculate gradients between grid points of the other system
-        #these gradients will then be used to interpolate the other potentials
-        #to the current potentials
+        '''
+        calculate gradients between grid points of the other system
+        these gradients will then be used to interpolate the other potentials
+        to potentials on the own grid points
+        '''
         gradients = gradient(other.potentials,other.grid.x_h,other.grid.y_h)
         #take difference between own x positions and other x positions
         x_diff = other.grid.x - self.grid.x.reshape(-1,1)
@@ -920,7 +925,7 @@ def build_from_segments(x=None,y=None,Ns=None):
                 else:
                     start = steps_cumulative[i-1]
                 end = steps_cumulative[i]
-                print('start end',start,end)
+                #print('start end',start,end)
                 h[start:end] = grid_spacings[i]
             outputs.append(h)
         elif np.all(np.array(params)<1):

@@ -2,7 +2,7 @@
 """
 Created on Fri Dec 16 12:12:03 2016
 
-@author: ahfku
+@author: Alexander Kuhn-Regnier
 """
 from __future__ import print_function
 from AMR_system import Grid,build_from_segments

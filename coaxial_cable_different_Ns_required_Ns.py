@@ -96,7 +96,7 @@ for Ns,cross_section,grid_positions,ls,marker,c,zorder,gs in zip(Ns_array,
                                               grid_positions_list,linestyles,
                                               markers,colours,zorders,
                                               grid_spacings):
-    plt.plot(grid_positions,cross_section,label=r'$\mathrm{h:%0.2e\ m}$'%gs,
+    plt.plot(grid_positions,cross_section,label=r'$\mathrm{h=%0.2e\ m}$'%gs,
              lw=lw,ls=ls,marker=marker,markevery=markevery,c=c,
              ms = ms,zorder=zorder)
     plt.xlabel('$\mathrm{x\ (m)}$',
@@ -151,7 +151,7 @@ for Ns,cross_section,grid_positions,ls,marker,c,zorder,gs in zip(Ns_array,
                                               grid_positions_list,linestyles,
                                               markers,colours,zorders,
                                               grid_spacings):
-    plt.plot(grid_positions,cross_section,label=r'$\mathrm{h:%0.2e\ m}$'%gs,
+    plt.plot(grid_positions,cross_section,label=r'$\mathrm{h=%0.2e\ m}$'%gs,
              lw=lw,ls=ls,marker=marker,markevery=markevery,c=c,
              ms = ms,zorder=zorder)
     plt.xlabel('$\mathrm{x\ (m)}$',
