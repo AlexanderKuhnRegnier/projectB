@@ -189,7 +189,7 @@ def create_EDM_system_from_grid(grid,kx,ky=None,size=(1.,1.),dust_pos=None,
     return system,dust_tuple,position
   
 if __name__ == '__main__':
-    factor = 10
+    factor = 30
     k = 1.
     #with k=1, and a dust size of 0.1 mm (100e-6 m),
     #the factor has to be at least 300 in order to be able to
@@ -198,7 +198,7 @@ if __name__ == '__main__':
                              size=(260*(1+2*k),30*(1+2*k)),
                              small_sources=True,dust_pos=350.,
                              dust_size=1e-1)
-    test.show_setup()
+#    test.show_setup()
     print('Dust Size:',dust_size)
-#    test.SOR(w=1.5,tol=1e-10,max_time=10)
+    test.SOR(w=1.5,tol=1e-10,max_time=10)
 #    test.show(quiver=False)

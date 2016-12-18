@@ -11,6 +11,7 @@ from numba import jit
 from scipy import sparse
 from time import clock
 from matplotlib.collections import LineCollection
+from matplotlib.ticker import FuncFormatter
 #np.set_printoptions(threshold=np.inf)
 plt.rcParams['image.cmap'] = 'viridis'  #set default colormap to something
                                         #better than jet
@@ -272,9 +273,20 @@ class Grid:
                              self.source_potentials.T*self.potential_scaling)        
         grid_lines = self.create_grid_line_collection(**kwargs)
         ax.add_collection(grid_lines) 
-        cb = fig.colorbar(plot)
+
+        def sci_format(value, pos):
+            return r'$\mathrm{%.0e}$'%value
+
+        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
         plt.axis('square')
         plt.autoscale()
+    
+        cb.ax.tick_params(labelsize=16) 
+        ax.tick_params(axis='both')
+        plt.rc('font', size=13)
+        ax.ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)
+        
         cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
         ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
         ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)        
@@ -826,7 +838,19 @@ class AMR_system(object):
                    self.grid.grid[1]*self.grid.distance_factor)
             plt.quiver(X[::every,::every],Y[::every,::every],
                        U[::every,::every],V[::every,::every])
-        cb = fig.colorbar(plot)
+            
+        def sci_format(value, pos):
+            return r'$\mathrm{%.0e}$'%value        
+            
+        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
+        ax.ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)        
+        cb.ax.tick_params(labelsize=16) 
+        ax.tick_params(axis='both')        
+        plt.rc('font', size=13)
+#        ax.xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+#        ax.yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+
         plt.axis('square')
         plt.autoscale('tight')
         if title:
@@ -836,28 +860,54 @@ class AMR_system(object):
         ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)
         plt.show()
         
-    def streamplot(self,title='',**fargs):
-        plt.figure()
+    def streamplot(self,title='',density=[1.,1.],
+                   width_scale=8.,alpha=0.3):
+        x_bounds = np.append([-self.grid.x_h[0]/2.],
+                             self.grid.x+np.append(self.grid.x_h,
+                                                   [self.grid.x_h[-1]])/2.)
+        '''
+        Repeat for the y axis
+        '''
+        y_bounds = np.append([-self.grid.y_h[0]/2.],
+                             self.grid.y+np.append(self.grid.y_h,
+                                                   [self.grid.y_h[-1]])/2.)          
+        x_bounds *= self.grid.distance_factor
+        y_bounds *= self.grid.distance_factor
+        fig,ax = plt.subplots()
+        plot = ax.pcolorfast(x_bounds,y_bounds,
+                             self.potentials.T*self.grid.potential_scaling,
+                             alpha=alpha,
+                             cmap=plt.cm.gray,zorder=0)  
         U,V = self.E_field
         fields = self.E_field_mag
-        U = -U.T
-        V = -V.T        
-        X,Y = np.meshgrid(self.grid.x*self.grid.size[0],
-                          self.grid.y*self.grid.size[0])
-        lw = 8*fields.T/np.max(fields)
-        plt.streamplot(X, Y, U, V,
-                       density = [1,1],
-                       color = self.potentials.T,
-                       linewidth = lw)
+        X,Y = (self.grid.grid[0]*self.grid.distance_factor,
+                self.grid.grid[1]*self.grid.distance_factor)
+        lw = width_scale*fields.T/np.max(fields)
+        stream = ax.streamplot(X.T, Y.T, U.T, V.T,
+                       density = density,
+                       color = self.potentials.T*self.grid.potential_scaling,
+                       linewidth = lw,zorder=100)
         if title:
             plt.title(title)
-        plt.tight_layout() 
-        plt.axis('tight')
-        cb = plt.colorbar() 
-        ax = plt.gca()
+        
+        def sci_format(value, pos):
+            return r'$\mathrm{%.0e}$'%value
+        
+        cb = fig.colorbar(stream.lines,format=FuncFormatter(sci_format))  
+        cb.ax.tick_params(labelsize=16) 
+        ax.tick_params(axis='both')
+        plt.rc('font', size=13)
+        ax.ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)
+#        ax.xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+#        ax.yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+
+        plt.axis('square')        
+        ax.set_xlim(min(x_bounds),max(x_bounds))
+        ax.set_ylim(min(y_bounds),max(y_bounds))
         cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
-        ax.set_xlabel(r'\mathrm{x\ (m)}',fontsize=16)
-        ax.set_ylabel(r'\mathrm{y\ (m)}',fontsize=16)          
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)          
         plt.show()        
         
     def show_setup(self):
@@ -973,8 +1023,8 @@ if __name__ == '__main__':
 #                               )
     xh,yh = build_from_segments(((1,50),),((1,200),))
     test = Grid(xh,yh)
-    test.rectangle(1,(0.5,0.5),0.4,0.7)
-    test.rectangle(1,(0.2,0.4),0.02,0.02)
+    test.rectangle(100,(0.5,0.5),0.4,0.7)
+    test.rectangle(100,(0.2,0.4),0.02,0.02)
     test.show(color=(0,0,0,0.1))
     system = AMR_system(test)
 
@@ -983,3 +1033,6 @@ if __name__ == '__main__':
     system.SOR(max_time=1,verbose=False)
 #    system.gauss_seidel()
     system.show(quiver=True,every=5)
+    #%%
+    system.streamplot(alpha=0.5)
+    #%%

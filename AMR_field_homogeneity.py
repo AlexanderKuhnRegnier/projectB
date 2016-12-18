@@ -7,6 +7,7 @@ Created on Dec 7 2016
 Calculating the homogeneity of the electric field generated for a 
 given configuration of the sources.
 """
+#%%
 from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ plt.ioff()
 from AMR_EDM import create_EDM_system
 from AMR_system import gradient
 from matplotlib.ticker import FuncFormatter
+import cPickle as pickle
 factor = 280
 k = 0.9
 size = (260*(1+2*k),30*(1+2*k))
@@ -23,9 +25,11 @@ system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      size=size,
                                      small_sources=True,
                                      dust_pos=None)
+print('system created')
 #system.show_setup()
-#%%
-system.SOR(tol=1e-16,max_time=1000)
+with open('potentials','rb') as f:    
+    system.potentials = pickle.load(f)
+system.SOR(tol=1e-16,max_time=1)
 
 #system.show()
 
@@ -53,20 +57,50 @@ distances = system.grid.x*system.grid.distance_factor
 beam_path = E_field_mag[:,system.potentials.shape[1]/2]
 
 plt.figure()
-plt.plot(distances,beam_path)
+plt.plot(distances,beam_path,lw=3,c='#377eb8')
 plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
 plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
 plt.autoscale(enable=True, axis='x', tight=True)
-
+plt.margins(y=0.05)
 plt.gca().tick_params(axis='both',which='major', labelsize=16)
 plt.gca().tick_params(axis='both',which='minor', labelsize=16)
 plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
 plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
 plt.minorticks_on()
 plt.tight_layout()
-plt.show()
+plt.grid()
 
-plt.savefig('EDM_e_mag_cross_section.pdf',bbox_inches='tight')
+ax = plt.gca()
+ax.annotate(s=r'$\mathrm{central\ plate}$',
+            xy=(0.35,1.55e6),
+            xytext=(0.06,1.4e6),
+            arrowprops={'arrowstyle':'simple',
+                        'color':'k',
+                        'lw':1},
+            xycoords='data',
+            fontsize=20)
+
+side_height = 4e5
+ax.annotate(s=r'$\mathrm{side\ plates}$',
+            xy=(0.22,side_height),
+            xytext=(0.06,7e5),
+            arrowprops={'arrowstyle':'simple',
+                        'color':'k',
+                        'lw':1},
+            xycoords='data',
+            fontsize=20)
+
+ax.annotate(s='',
+            xy=(0.35,side_height),
+            xytext=(0.06,7e5),
+            arrowprops={'arrowstyle':'simple',
+                        'color':'k',
+                        'lw':1},
+            xycoords='data',
+            fontsize=20)
+plt.show()
+#%%
+#plt.savefig('EDM_e_mag_cross_section.pdf',bbox_inches='tight')
 
 mask = (distances<0.453) & (distances>0.274)
 plt.figure()
@@ -81,15 +115,16 @@ plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1
 plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.3e}$'%value))
 plt.minorticks_on()
 plt.tight_layout()
+plt.grid()
 plt.show()
 
-plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
+#plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
 #%%
 
 #%%
 #tolerances = [0.01,1e-11]
 #tolerances = np.linspace(1e-5,0.9,1000)
-tolerances = np.linspace(1e-5,1e-3,1000)
+tolerances = np.linspace(1e-5,0.96,1000)
 print('total number of points along x:',beam_path.size)
 #get the E field mag at the center of the experiment
 centre_x = max(system.grid.x)/2.
@@ -165,7 +200,7 @@ markers = ['>','D']
 markevery = 0.1     
 ms = 12
 lw = 5
-labels = ['central\ source','side\ source']
+labels = ['central\ plate','side\ plate']
 if overview:
     plt.figure()
     for longest,c,marker,ls,label in zip(longest_list,colours,
@@ -183,29 +218,39 @@ if overview:
     plt.margins(0.05)
     
     plt.gca().tick_params(axis='both', labelsize=16)
-    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
-    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
     plt.minorticks_on()
     plt.grid()
     plt.tight_layout()
     plt.show()
+    
+    plt.savefig('homogeneity_overview_no_dust.pdf',bbox_inches='tight')
 else:
     fig,axes = plt.subplots(2,1,sharex=True,sharey=False)
     for ax,longest,c,marker,ls,label in zip(axes,longest_list,colours,
                                          markers,linestyles,labels):
-        ax.plot(tolerances*100,longest,c=c,ls=ls,marker=marker,markevery=markevery,
-                 label=r'$\mathrm{%s}$' % label,ms=ms,lw=lw)
+        ax.plot(tolerances*100,longest,c=c,ls=ls,
+                 label=r'$\mathrm{%s}$' % label,lw=lw)
         ax.set_ylabel(r'$\mathrm{L_{h}\ (m)}$',fontsize=16)
         ax.minorticks_on()
         ax.margins(0.05)
         ax.set_title(r'$\mathrm{%s}$' % label,fontsize=16)
         ax.grid()
         ax.tick_params(axis='both', labelsize=15)
+        ax.axvline(tolerances[0]*100,c='k',lw=1.5)
+        ax.text(0.09,0.84,s=r'$\mathrm{tol=%.2e}$'%(tolerances[0]*100),
+                    transform=ax.transAxes,fontsize=16,
+                    bbox=dict(facecolor='white', edgecolor='white'))
+        ax.arrow(0.09,0.87,-0.027,0,transform=ax.transAxes,fc='k', ec='k',
+                 head_width=0.032, head_length=0.012,lw=1.7)
         
-    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value if pos%2 else ''))
-    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value if pos%2 else ''))
     axes[-1].set_xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=16)
     axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
     plt.tight_layout()
     plt.show()
+    
+#    plt.savefig('detailed_homogeneity_no_dust.pdf',bbox_inches='tight')
 #%%
