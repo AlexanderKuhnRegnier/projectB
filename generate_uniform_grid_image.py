@@ -58,4 +58,4 @@ plt.annotate(
 
 
 plt.show()
-fig.savefig('non_uniform_grid.pdf',bbox_inches='tight')
+#fig.savefig('non_uniform_grid.pdf',bbox_inches='tight')

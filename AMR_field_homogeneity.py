@@ -27,8 +27,10 @@ system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      dust_pos=None)
 print('system created')
 #system.show_setup()
-with open('potentials2','rb') as f:    
-    system.potentials = pickle.load(f)
+
+#with open('potentials2','rb') as f:    
+#    system.potentials = pickle.load(f)
+    
 system.SOR(tol=1e-16,max_time=1000)
 system.SOR(w=1.,tol=1e-16,max_time=1000)
 #system.show()

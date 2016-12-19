@@ -20,7 +20,8 @@ import cPickle as pickle
 factor = 280
 k = 0.9
 size = (260*(1+2*k),30*(1+2*k))
-dust_positions = [279.94,339.95]
+#dust_positions = [279.94,339.95]
+dust_positions = [279.94]
 longest_list = []
 for dust_pos in dust_positions:
     system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
@@ -28,12 +29,14 @@ for dust_pos in dust_positions:
                                          small_sources=True,
                                          dust_pos=dust_pos,
                                          dust_size=0.05)
+    
     #preload previously calculated potentials for a similar system
-    with open('potentials2','rb') as f:    
-        system.potentials = pickle.load(f)
+#    with open('potentials2','rb') as f:    
+#        system.potentials = pickle.load(f)
+        
     #system.show_setup()
-    system.SOR(tol=1e-16,max_time=1000)
-    system.SOR(w=1.,tol=1e-16,max_time=300)
+    system.SOR(tol=1e-16,max_time=200)
+    system.SOR(w=1.,tol=1e-16,max_time=200)
     #system.show()
     print('dust size:',dust_size)
     
@@ -189,7 +192,8 @@ markevery = 0.1
 ms = 12
 lw = 5
 plt.rc('font', size=15)  
-labels = ['dust\ x=%.2e m'%(dust_positions[0]/1e3),'dust\ x=%.2e m'%(dust_positions[1]/1e3)]
+#labels = ['dust\ x=%.2e m'%(dust_positions[0]/1e3),'dust\ x=%.2e m'%(dust_positions[1]/1e3)]
+labels = ['dust\ x=%.2e m'%(dust_positions[0]/1e3)]
 if overview:
     plt.figure()
     for longest,c,marker,ls,label in zip(longest_list,colours,

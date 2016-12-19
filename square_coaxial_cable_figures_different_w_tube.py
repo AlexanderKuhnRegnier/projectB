@@ -12,7 +12,7 @@ from AMR_coaxial_cable import Cable
 plt.ioff()
 
 
-save = True
+save = False
 max_time = 200000000
 #Plot two different systems with different side length of the 
 #source
@@ -85,4 +85,5 @@ def execute_all():
     normal_source()
     small_tube()
     large_tube()
-    
+if __name__ == '__main__':
+    execute_all()

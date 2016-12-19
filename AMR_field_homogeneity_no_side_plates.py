@@ -31,14 +31,18 @@ for filename,side_source in zip(files,side_sources):
                                          dust_pos=None,
                                          dust_size=None)
     #preload previously calculated potentials for a similar system
-    with open(filename,'rb') as f:    
-        system.potentials = pickle.load(f)
+    
+#    with open(filename,'rb') as f:    
+#        system.potentials = pickle.load(f)
+
     #system.show_setup()
 #    system.SOR(tol=1e-16,max_time=1)
     system.SOR(w=1.,tol=1e-16,max_time=1000)
     #system.show()
-    with open(filename,'wb') as f:
-        pickle.dump(system.potentials,f,protocol=2)
+    
+#    with open(filename,'wb') as f:
+#        pickle.dump(system.potentials,f,protocol=2)
+
     systems.append(system)
 #%%
 longest_list = []
