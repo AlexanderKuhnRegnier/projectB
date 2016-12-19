@@ -39,6 +39,15 @@ import os
 from matplotlib.ticker import FormatStrFormatter
 plt.ioff()
 
+def format_sci(number,exp,dec_places=1):
+    format_dict = {'scaled_number':number/(10**exp),
+              'dec_places':dec_places,
+              'dec_places_2':dec_places+2,
+              'exp':exp}
+    formatted = ('{scaled_number:0={dec_places_2:d}.{dec_places:d}f}e{exp:+d}'.
+             format(**format_dict))
+    return formatted
+
 #augment original system class by adding new methods which can plot the 
 #potential and electric field across the diagonal of the system
 class Cable(AMR_system):
@@ -48,6 +57,7 @@ class Cable(AMR_system):
         Ideally, the number of grid points should be an ODD number for this
         to work ideally - due to the symmetry of the problem.
         '''
+        plt.rc('font', size=15)
         #use middle row!
         mid_row_index = int((self.Nsx-1)/2.)
         cross_section = self.potentials[mid_row_index]*self.grid.potential_scaling
@@ -56,19 +66,24 @@ class Cable(AMR_system):
 #        cross_section = np.diag(self.potentials)
         plt.figure()
         plt.title(r'$\epsilon = %.1e,\ \mathrm{Nsx} = %.1e,\ \mathrm{Nsy} = %.1e,\ \mathrm{L} = %.1e$' %
-                  (self.errors[-1],self.Nsx,self.Nsy,side_length),fontsize=18)                  
+                  (self.errors[-1],self.Nsx,self.Nsy,side_length)+'\n',fontsize=19)                  
                                      
         grid_positions = self.grid.grid[0][:,0]*self.grid.distance_factor
-        plt.plot(grid_positions,cross_section,label='potential')
+        plt.plot(grid_positions,cross_section,label='potential',
+                 c='#377eb8',lw=3)
         plt.xlabel(r'$\mathrm{x\ (m)}$',
-                              fontsize=16)
+                              fontsize=20)
         plt.ylabel(r'$\mathrm{Potential\ (V)}$',
-                              fontsize=16)
+                              fontsize=20)
     #    plt.legend()
         ymin,ymax = plt.ylim()
         plt.ylim(ymax=ymax*1.08)
         plt.tight_layout()
-        
+        plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False) 
+        plt.gca().tick_params(axis='both', labelsize=16)
+        plt.minorticks_on()
+        plt.grid()           
         if savepath:
             plt.savefig(savepath,bbox_inches='tight',dpi=200) 
             plt.close('all') 
@@ -79,12 +94,14 @@ class Cable(AMR_system):
                 plt.close('all')
         return cross_section
  
-    def cross_section(self,side_length=0,show=True,savepath='',fit='inverse'):
+    def cross_section(self,side_length=0,show=True,savepath='',fit='inverse',
+                      pos = [0.,0.]):
         '''
         now, plot a cross section of the electric field magnitude across the 
         center. Ideally, the number of grid points should be an ODD number 
         for this to work ideally - due to the symmetry of the problem.
         '''
+        plt.rc('font', size=15)
         assert self.Nsy == self.Nsx,'Needs square grid! (uses diagonal)'        
         #use middle row!
         mid_row_index = np.abs(self.grid.x-1/2.).argmin()
@@ -126,16 +143,16 @@ class Cable(AMR_system):
 #                  format(self.tol,self.Nsx,self.Nsy,side_length))
 
         plt.title(r'$\epsilon = %.1e,\ \mathrm{Nsx} = %.1e,\ \mathrm{Nsy} = %.1e,\ \mathrm{L} = %.1e$' %
-                  (self.errors[-1],self.Nsx,self.Nsy,side_length),fontsize=18)                  
+                  (self.errors[-1],self.Nsx,self.Nsy,side_length)+'\n',fontsize=19)                  
                                    
         grid_positions = self.grid.grid[0][:,0][skip:]*self.grid.distance_factor
         print('grid positions',grid_positions.shape)
         print('cross section',cross_section.shape)
-        plt.plot(grid_positions,cross_section,label='electric field magnitude')
+        plt.plot(grid_positions,cross_section,lw=3,c='#377eb8')
         plt.xlabel(r'$\mathrm{x\ (m)}$',
-                              fontsize=16)
+                              fontsize=20)
         plt.ylabel(r'$\mathrm{Electric\ Field\ Magnitude\ (V\ m^{-1})}$',
-                              fontsize=16)
+                              fontsize=20)
         
         if fit=='inverse':
             #the electric field should vary as 1/r, where r is the distance
@@ -148,13 +165,25 @@ class Cable(AMR_system):
             print('stds')
             stds = np.sqrt(np.diag(pcov))
             print(stds)
-            ratio = stds/popt
-            results = np.vstack((popt,stds,ratio))
-            float_format = lambda s : '{:0.2e}'.format(s)
-            formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
+            p = popt
+            exponent0 = int(format(p[0],'.1e')[-3:])
+            exponent1= int(format(p[1],'.1e')[-3:])
+            p_strings = [format_sci(p[0],exponent0,dec_places=3),
+                         format_sci(p[1],exponent1,dec_places=3)]
+                         
+            std_strings = [format_sci(stds[0],exponent0,dec_places=3),
+                           format_sci(stds[1],exponent1,dec_places=3)]
+            text = plt.text(pos[0],pos[1],(r'$\mathrm{I=k/(x+s)}$'+'\n'+
+                r'$\mathrm{k= %s \pm %s}$'+'\n'+r'$\mathrm{s= %s \pm %s}$')%
+                (p_strings[0],
+                 std_strings[0],
+                 p_strings[1],
+                 std_strings[1]),fontdict={'fontsize':18},
+                bbox=dict(facecolor='white', edgecolor='black'),
+                transform=plt.gca().transAxes)                           
+                                                 
             plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
-                                     label=str(formatted),linestyle='--')
-            plt.legend()            
+                                     linestyle='--',lw=3,c='#4daf4a')           
         elif fit == 'linear':
             #do a linear fit, if the cable is very close to the border
             func = lambda r,m,c:m*r+c
@@ -164,17 +193,44 @@ class Cable(AMR_system):
             print('stds')
             stds = np.sqrt(np.diag(pcov))
             print(stds)
-            ratio = stds/popt
-            results = np.vstack((popt,stds,ratio))
-            float_format = lambda s : '{:0.2e}'.format(s)
-            formatted = np.array([float_format(i) for i in results.flatten()]).reshape(3,-1)
+            p = popt
+            exponent0 = int(format(p[0],'.1e')[-3:])
+            exponent1= int(format(p[1],'.1e')[-3:])
+            p_strings = [format_sci(p[0],exponent0,dec_places=3),
+                         format_sci(p[1],exponent1,dec_places=3)]
+                         
+            std_strings = [format_sci(stds[0],exponent0,dec_places=3),
+                           format_sci(stds[1],exponent1,dec_places=3)]
+            text = plt.text(pos[0],pos[1],(r'$\mathrm{I=m \times x+c,}$'+'\n'+
+                r'$\mathrm{m= %s \pm %s}$'+'\n'+r'$\mathrm{c= %s \pm %s}$')%
+                (p_strings[0],
+                 std_strings[0],
+                 p_strings[1],
+                 std_strings[1]),fontdict={'fontsize':18},
+                bbox=dict(facecolor='white', edgecolor='black'),
+                transform=plt.gca().transAxes)                           
+                                     
             plt.plot(grid_positions,[func(i,*popt) for i in grid_positions],
-                                     label=str(formatted),linestyle='--')
-            plt.legend()
+                                     linestyle='--',c='#4daf4a',lw=3)
         #ymin,ymax = plt.ylim()
         #plt.ylim(ymax=ymax*1.1)
+        
+#        leg = plt.legend(loc='best')
+#        ltext  = leg.get_texts()  # all the text.Text instance in the legend
+#        llines = leg.get_lines()  # all the lines.Line2D instance in the legend
+#        plt.setp(ltext, fontsize=15)    # the legend text fontsize
+#        plt.setp(llines, linewidth=1.5)      # the legend linewidth
+#                
+        
         plt.tight_layout()
-        plt.axis('tight')        
+        plt.axis('tight')    
+        plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)         
+        plt.gca().tick_params(axis='both', labelsize=16)
+#        plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+#        plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+        plt.minorticks_on()
+        plt.grid()        
         if savepath:
             plt.savefig(savepath,bbox_inches='tight',dpi=200) 
             plt.close('all') 

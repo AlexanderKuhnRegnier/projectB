@@ -13,7 +13,7 @@ plt.ioff()
 
 
 save = True
-max_time = 100
+max_time = 200000000
 #Plot two different systems with different side length of the 
 #source
 
@@ -33,7 +33,8 @@ def normal_source():
     cable.show(quiver=True,every=12)
     if save:
         plt.savefig('normal_coaxial_cable_overview.pdf',bbox_inches='tight')
-    cable.cross_section(side_length=side_length)
+    cable.cross_section(side_length=side_length,
+                        pos = [0.4,0.65])
     if save:
         plt.savefig('normal_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
 
@@ -54,7 +55,7 @@ def small_tube():
     cable2.show(quiver=True,every=12)
     if save:
         plt.savefig('small_tube_coaxial_cable_overview.pdf',bbox_inches='tight')
-    cable2.cross_section(side_length=side_length,fit='linear')
+    cable2.cross_section(side_length=side_length,fit='linear',pos = [0.07,0.1])
     if save:
         plt.savefig('small_tube_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
 
@@ -75,7 +76,8 @@ def large_tube():
     cable3.show(quiver=True,every=10)
     if save:
         plt.savefig('large_tube_coaxial_cable_overview.pdf',bbox_inches='tight')
-    cable3.cross_section(side_length=side_length)
+    cable3.cross_section(side_length=side_length,
+                         pos = [0.4,0.65])
     if save:
         plt.savefig('large_tube_coaxial_cable_e_field_cross.pdf',bbox_inches='tight')
 
@@ -83,3 +85,4 @@ def execute_all():
     normal_source()
     small_tube()
     large_tube()
+    

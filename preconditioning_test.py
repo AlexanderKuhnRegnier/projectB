@@ -39,23 +39,23 @@ raw.SOR(tol=tol,max_iter=max_iter,verbose=False)
 rawtime = clock()-start
 times.append(rawtime)
 ######
-raw.show(title='raw result')
+#raw.show(title='raw result')
 #####
 
 
 #####
-test.show(quiver=False)
+#test.show(quiver=False)
 #####
 start = clock()
 #test.precondition(101,tol=1e-2,verbose=False)
 #test.precondition(81,tol=1e-1,verbose=False)
-test.precondition((60,70),tol=1e-3,verbose=False)
+test.precondition((60,70),tol=1e-5,verbose=False)
 #test.precondition(251,tol=1e-3,verbose=False)
 precondtime = clock()-start
 times.append(precondtime)
 
 #####
-test.show(title='after preconditioning')
+#test.show(title='after preconditioning')
 #####
 test.SOR(tol=tol,max_iter=max_iter,verbose=False)
 #####
@@ -63,7 +63,7 @@ test.SOR(tol=tol,max_iter=max_iter,verbose=False)
 time2 = clock()-start
 times.append(time2)
 
-test.show(title='result with precon')
+#test.show(title='result with precon')
 #####
 
 

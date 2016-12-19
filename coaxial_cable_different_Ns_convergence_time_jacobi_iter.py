@@ -26,8 +26,8 @@ def format_sci(number,exp,dec_places=1):
 
 save = False
 max_time = 600
-tolerances = [1e1,1e-7]
-Ns_array = np.linspace(10,800,20,dtype=np.int64)
+tolerances = [1e1]
+Ns_array = np.linspace(40,440,11,dtype=np.int64)
 side_length = 20.
 tot_last_iters = []
 
@@ -35,14 +35,13 @@ for tol in tolerances:
     grid_spacings = []
     errors = []
     last_iters = []
-    ws = []
     for Ns in Ns_array:
         grid = Grid(*build_from_segments(((1,Ns-1),)),size=(60.,60.),
                     units='mm',potential_scaling=10.)
         grid.square(1,(30.,30.),side_length)
         cable = Cable(grid)
         #solve system
-        cable.SOR(tol=tol,max_iter=1e7,max_time=max_time,verbose=False)   
+        cable.iterative_jacobi(tol=tol,max_iter=1e7,max_time=max_time,verbose=False)   
         #generate figures
     #    cable.cross_section_potential(side_length=side_length)
     #    if save:
@@ -57,19 +56,19 @@ for tol in tolerances:
         errors.append(cable.errors[-1])
         last_iters.append(cable.last_iteration)
     #    print('norm:',np.linalg.norm(cable.potentials)/np.sqrt(Ns**2))
-        ws.append(cable.w)
         grid_spacings.append(cable.grid.x_h[0]*cable.grid.distance_factor)
     
     spacing = 12
-    print('{1:>{0:d}s}{2:>{0:d}s}{3:>{0:d}s}{4:>{0:d}s}'.format(spacing,'Ns',
-                                          'Last Error','Iterations','w'))
-    for Ns,error,iterations,w in zip(Ns_array,errors,last_iters,ws):
-        print('{1:>{0:d}.2e}{2:>{0:d}.2e}{3:>{0:d}.2e}{4:>{0:d}.2e}'.
-              format(spacing,Ns,error,iterations,w))
+    print('{1:>{0:d}s}{2:>{0:d}s}{3:>{0:d}s}'.format(spacing,'Ns',
+                                          'Last Error','Iterations'))
+    for Ns,error,iterations in zip(Ns_array,errors,last_iters):
+        print('{1:>{0:d}.2e}{2:>{0:d}.2e}{3:>{0:d}.2e}'.
+              format(spacing,Ns,error,iterations))
     tot_last_iters.append(last_iters)
     
          
 #%%
+
 ####
 ####Number of grid points along axis vs iterations
 ####
@@ -124,7 +123,7 @@ plt.minorticks_on()
 plt.grid()
 plt.show()
 
-#plt.savefig('iter_vs_Ns_800Ns_SOR.pdf',bbox_inches='tight')
+#plt.savefig('iter_vs_Ns_800Ns_jacobi_iter.pdf',bbox_inches='tight')
 
 #%%
 ###
@@ -198,7 +197,7 @@ plt.grid()
 plt.tight_layout()
 plt.show()
 
-#plt.savefig('iter_vs_h_800Ns_last_half_fit_SOR.pdf',bbox_inches='tight')
+#plt.savefig('iter_vs_h_800Ns_last_half_fit_jacobi_iter.pdf',bbox_inches='tight')
 #%%
 
 
@@ -217,7 +216,7 @@ markevery = 1
 ms = 12
 lw = 5
 dec_places = 4
-positions = ((0.59,0.15),(0.03,0.65))
+positions = ((0.55,0.15),(0.03,0.65))
 for tol,last_iters,c,marker,ls,pos in zip(tolerances,tot_last_iters,colours,markers,
                                    linestyles,positions):
     plt.plot(Ns_array**2,last_iters,lw=lw,c=c,marker=marker,markevery=markevery,
@@ -232,11 +231,11 @@ for tol,last_iters,c,marker,ls,pos in zip(tolerances,tot_last_iters,colours,mark
     
     exponent0 = int(format(p[0],'.1e')[-3:])
     exponent1= int(format(p[1],'.1e')[-3:])
-    p_strings = [format_sci(p[0],exponent0,dec_places=1),
-                 format_sci(p[1],exponent1,dec_places=1)]
+    p_strings = [format_sci(p[0],exponent0,dec_places=2),
+                 format_sci(p[1],exponent1,dec_places=2)]
                  
-    std_strings = [format_sci(stds[0],exponent0,dec_places=1),
-                   format_sci(stds[1],exponent1,dec_places=1)]
+    std_strings = [format_sci(stds[0],exponent0,dec_places=2),
+                   format_sci(stds[1],exponent1,dec_places=2)]
                  
     print('p   ',p_strings)
     print('stds',std_strings)
@@ -275,93 +274,6 @@ plt.grid()
 plt.tight_layout()
 plt.show()
 
-
-#plt.savefig('iter_vs_N_800Ns_SOR_last_half_fit.pdf',bbox_inches='tight')
+plt.savefig('iter_vs_N_440Ns_jacobi_iter.pdf',bbox_inches='tight')
 
 #%%
-
-
-#
-#Analyse the dependence on number of grid points with power law fit
-#on a linear plot
-#
-#%%
-from scipy.optimize import curve_fit
-from copy import deepcopy
-def func(N,p,a):
-    return a*(N**p)
-    
-plt.figure()
-#colours =  ['#e41a1c','#377eb8','#4daf4a']
-colours =  ['#e41a1c','#377eb8']
-#linestyles = [':','--','-.']
-linestyles = ['','']
-#markers = ['>','^','D']
-markers = ['>','D']
-markevery = 1       
-ms = 12
-lw = 5
-dec_places = 4
-positions = ((0.59,0.15),(0.017,0.665))
-#orig_Ns = deepcopy(Ns_array)
-#orig_iter = deepcopy(last_iters)
-for tol,last_iters,c,marker,ls,pos in zip(tolerances,tot_last_iters,colours,markers,
-                                   linestyles,positions):
-    
-    plt.plot(Ns_array**2,last_iters,lw=lw,c=c,marker=marker,markevery=markevery,
-             ls=ls,ms=ms,label='$\mathrm{tol=%.1e}$'%tol,
-            markeredgecolor='k',markeredgewidth=1.2)
-    #do linear fit for each dataset
-#    p,V = np.polyfit(Ns_array[-Ns_array.size/2:]**2,
-#                     last_iters[-Ns_array.size/2:],deg=1,cov=True)
-    popt,pcov = curve_fit(func,Ns_array**2,last_iters)
-    stds = np.sqrt(np.diag(pcov))
-    print('parameters:',p)
-    print('stds      :',stds)
-    
-    exponent0 = int(format(popt[0],'.1e')[-3:])
-    exponent1= int(format(popt[1],'.1e')[-3:])
-    p_strings = [format_sci(popt[0],exponent0,dec_places=2),
-                 format_sci(popt[1],exponent1,dec_places=2)]
-                 
-    std_strings = [format_sci(stds[0],exponent0,dec_places=2),
-                   format_sci(stds[1],exponent1,dec_places=2)]
-                 
-    print('p   ',p_strings)
-    print('stds',std_strings)
-                   
-    N = np.linspace(10,max(Ns_array)*1.01,1000)**2
-    fitted = [func(i,*popt) for i in N]
-    plt.plot(N,fitted,ls ='--', c='k',lw=4)
-    text = plt.text(pos[0],pos[1],(r'$\mathrm{I=a \times N^p,}$'+'\n'+
-        r'$\mathrm{p= %s \pm %s}$'+'\n'+r'$\mathrm{a= %s \pm %s}$')%
-        (p_strings[0],
-         std_strings[0],
-         p_strings[1],
-         std_strings[1]),fontdict={'fontsize':16},
-        bbox=dict(facecolor='white', edgecolor='black'),
-        transform=plt.gca().transAxes)
-
-plt.xlabel('$\mathrm{Grid\ Points,\ N}$',
-                      fontsize=17)
-plt.ylabel(r'$\mathrm{Number\ of\ Iterations,\ I}$',
-                      fontsize=17)  
-
-#plt.axis('tight')
-plt.margins(0.05)
-
-leg = plt.legend(loc='best')
-ltext  = leg.get_texts()  # all the text.Text instance in the legend
-llines = leg.get_lines()  # all the lines.Line2D instance in the legend
-plt.setp(ltext, fontsize=17)    # the legend text fontsize
-plt.setp(llines, linewidth=1.5)      # the legend linewidth
-
-plt.gca().tick_params(axis='both', labelsize=16)
-plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
-plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
-plt.minorticks_on()
-plt.grid()
-plt.tight_layout()
-plt.show()
-
-plt.savefig('iter_vs_N_800Ns_SOR_powerlaw_fit.pdf',bbox_inches='tight')

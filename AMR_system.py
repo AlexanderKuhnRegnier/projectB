@@ -227,7 +227,7 @@ class Grid:
                  ((self.grid[1]-origin[1])**2)) < radius**2)
         self.source_potentials[mask] = potential
         
-    def create_grid_line_collection(self,lw=2,color=(0,0,0,0.1)):
+    def create_grid_line_collection(self,lw=2,color=(0,0,0,0.05)):
         x_lines = np.zeros((len(self.x),2,2))
         x_lines[:,:,0] = self.x[:,None]     #all the same x
         x_lines[:,:,1] = [0.,np.max(self.y)]
@@ -267,7 +267,7 @@ class Grid:
                              self.y+np.append(self.y_h,[self.y_h[-1]])/2.)    
         x_bounds *= self.distance_factor
         y_bounds *= self.distance_factor
-        print(x_bounds)
+#        print(x_bounds)
         fig,ax = plt.subplots()
         plot = ax.pcolorfast(x_bounds,y_bounds,
                              self.source_potentials.T*self.potential_scaling)        
@@ -277,19 +277,20 @@ class Grid:
         def sci_format(value, pos):
             return r'$\mathrm{%.0e}$'%value
 
-        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
+#        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
+        cb = fig.colorbar(plot,format='%.0e')
         plt.axis('square')
         plt.autoscale()
     
         cb.ax.tick_params(labelsize=16) 
         ax.tick_params(axis='both')
-        plt.rc('font', size=13)
+        plt.rc('font', size=15)
         ax.ticklabel_format(style='sci',scilimits=(0,0),
                             useoffset=False)
         
-        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
-        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)        
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=20)
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=20)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=20)        
         plt.show()
         
 class AMR_system(object):
@@ -475,6 +476,7 @@ class AMR_system(object):
         self.potentials = x.reshape(self.Nsx,-1)        
         
     def iterative_jacobi(self, tol=1e-2, max_iter=10000, max_time=10, verbose=True):
+        max_iter = int(max_iter)
         sources = self.sources
         inv_source_mask = ~(sources.reshape(-1,1))
         '''
@@ -491,8 +493,12 @@ class AMR_system(object):
         x[1:-1,1:-1] = self.potentials
         #get diagonal, D
         D = self.A.diagonal()
+        errors = np.zeros(max_iter,dtype=np.float64)
+        times  = np.zeros(max_iter,dtype=np.float64)        
+        
+        increasing_error_count = -1 #will catch first time,
+        #since -1th element is initialised to 0        
         start = clock()
-        max_iter = int(max_iter)
         for iteration in xrange(max_iter):
             #need to use 'extended' step size array, since the 
             #boundary conditions are being used here as well
@@ -503,19 +509,26 @@ class AMR_system(object):
             x[1:-1,1:-1][sources] = self.grid.source_potentials[sources]
             error = np.linalg.norm(self.A.dot(x[1:-1,1:-1].reshape(-1,1))
                                                        [inv_source_mask])
-#            plt.figure()
-#            plt.imshow(x.T,origin='lower',interpolation='none')
-#            plt.colorbar()
-#            plt.show()
+            errors[iteration] = error
+            time_diff = clock()-start
+            times[iteration]  = time_diff
             if verbose:
                 print("iteration, error:",iteration,error)
             if error < tol:
                 print('Error in potential lower than tolerance')
                 break
-            if (clock()-start) > max_time:
+            elif time_diff > max_time:
                 print('Time limit exceed')
                 break
+            elif errors[iteration-1] < error:
+                increasing_error_count += 1
+                if increasing_error_count == 50:
+                    print('Error has increased 50 times')
+                    break            
         self.potentials = x[1:-1,1:-1] 
+        self.errors = errors[:iteration+1]
+        self.times = times[:iteration+1] 
+        self.last_iteration = iteration        
         
     @staticmethod
     @jit(nopython=True,cache=True)
@@ -649,9 +662,9 @@ class AMR_system(object):
         Ns_array = np.array([self.Nsx,self.Nsy],dtype=np.int64)
         errors = np.zeros(max_iter,dtype=np.float64)
         times  = np.zeros(max_iter,dtype=np.float64)
-        start = clock()
         increasing_error_count = -1 #will catch first time,
         #since -1th element is initialised to 0
+        start = clock()
         for iteration in xrange(max_iter):
             #need to use 'extended' step size array, since the 
             #boundary conditions are being used here as well
@@ -672,14 +685,14 @@ class AMR_system(object):
             if error < tol:
                 print('Error in potential lower than tolerance')
                 break
-            if errors[iteration-1] < error:
+            elif time_diff > max_time:
+                print('Time limit exceed')
+                break
+            elif errors[iteration-1] < error:
                 increasing_error_count += 1
                 if increasing_error_count == 50:
                     print('Error has increased 50 times')
-                    break
-            if time_diff > max_time:
-                print('Time limit exceed')
-                break
+                    break            
         self.potentials = x[1:-1,1:-1] 
         self.errors = errors[:iteration+1]
         self.times = times[:iteration+1] 
@@ -731,9 +744,9 @@ class AMR_system(object):
         
     def interpolate(self,other):
         '''
-        calculate gradients between grid points of the other system
-        these gradients will then be used to interpolate the other potentials
-        to potentials on the own grid points
+        Calculate gradients between grid points of the other system.
+        These gradients will then be used to interpolate the other potentials
+        to potentials on the own grid points.
         '''
         gradients = gradient(other.potentials,other.grid.x_h,other.grid.y_h)
         #take difference between own x positions and other x positions
@@ -821,7 +834,7 @@ class AMR_system(object):
         x_bounds *= self.grid.distance_factor
         y_bounds *= self.grid.distance_factor
         fig,ax = plt.subplots()
-        print('shapes:',x_bounds.shape,y_bounds.shape,self.potentials.T.shape)
+#        print('shapes:',x_bounds.shape,y_bounds.shape,self.potentials.T.shape)
         plot = ax.pcolorfast(x_bounds,y_bounds,
                              self.potentials.T*self.grid.potential_scaling)      
         if grid_lines:
@@ -842,12 +855,14 @@ class AMR_system(object):
         def sci_format(value, pos):
             return r'$\mathrm{%.0e}$'%value        
             
-        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
+#        cb = fig.colorbar(plot,format=FuncFormatter(sci_format)) 
+        cb = fig.colorbar(plot,format='%.0e')
         ax.ticklabel_format(style='sci',scilimits=(0,0),
-                            useoffset=False)        
+                            useoffset=False) 
+        plt.gca().tick_params(axis='both', labelsize=16)
         cb.ax.tick_params(labelsize=16) 
         ax.tick_params(axis='both')        
-        plt.rc('font', size=13)
+        plt.rc('font', size=15)
 #        ax.xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
 #        ax.yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
 
@@ -855,9 +870,9 @@ class AMR_system(object):
         plt.autoscale('tight')
         if title:
             plt.title(title)
-        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
-        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=20)
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=20)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=20)
         plt.show()
         
     def streamplot(self,title='',density=[1.,1.],
@@ -893,10 +908,12 @@ class AMR_system(object):
         def sci_format(value, pos):
             return r'$\mathrm{%.0e}$'%value
         
-        cb = fig.colorbar(stream.lines,format=FuncFormatter(sci_format))  
+#        cb = fig.colorbar(stream.lines,format=FuncFormatter(sci_format))  
+        cb = fig.colorbar(stream.lines,format='%.0e')  
+        plt.gca().tick_params(axis='both', labelsize=16)
         cb.ax.tick_params(labelsize=16) 
         ax.tick_params(axis='both')
-        plt.rc('font', size=13)
+        plt.rc('font', size=15)
         ax.ticklabel_format(style='sci',scilimits=(0,0),
                             useoffset=False)
 #        ax.xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
@@ -905,13 +922,13 @@ class AMR_system(object):
         plt.axis('square')        
         ax.set_xlim(min(x_bounds),max(x_bounds))
         ax.set_ylim(min(y_bounds),max(y_bounds))
-        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=16)
-        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=16)          
+        cb.set_label(r'$\mathrm{Potential\ (V)}$',fontsize=20)
+        ax.set_xlabel(r'$\mathrm{x\ (m)}$',fontsize=20)
+        ax.set_ylabel(r'$\mathrm{y\ (m)}$',fontsize=20)          
         plt.show()        
         
-    def show_setup(self):
-        self.grid.show()
+    def show_setup(self,**kwargs):
+        self.grid.show(**kwargs)
         
     def calculate_E_field(self):
         print('calculating e field')
@@ -1030,7 +1047,7 @@ if __name__ == '__main__':
 
 #    system.SOR(max_iter=10000,max_time=1,tol=1e-10,verbose=True)
 #    system.iterative_jacobi()
-    system.SOR(max_time=1,verbose=False)
+    system.SOR(max_time=1000,tol=1e-16,verbose=True)
 #    system.gauss_seidel()
     system.show(quiver=True,every=5)
     #%%

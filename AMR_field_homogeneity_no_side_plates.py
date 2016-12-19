@@ -20,23 +20,29 @@ import cPickle as pickle
 factor = 280
 k = 0.9
 size = (260*(1+2*k),30*(1+2*k))
-dust_positions = [279.94,339.95]
-longest_list = []
-for dust_pos in dust_positions:
+side_sources = [True,False]
+files = ['potentials2','potentials_no_side']
+#%%
+systems = []
+for filename,side_source in zip(files,side_sources):
     system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                          size=size,
-                                         small_sources=True,
-                                         dust_pos=dust_pos,
-                                         dust_size=0.05)
+                                         small_sources=side_source,
+                                         dust_pos=None,
+                                         dust_size=None)
     #preload previously calculated potentials for a similar system
-    with open('potentials2','rb') as f:    
+    with open(filename,'rb') as f:    
         system.potentials = pickle.load(f)
     #system.show_setup()
-    system.SOR(tol=1e-16,max_time=1000)
-    system.SOR(w=1.,tol=1e-16,max_time=300)
+#    system.SOR(tol=1e-16,max_time=1)
+    system.SOR(w=1.,tol=1e-16,max_time=1000)
     #system.show()
-    print('dust size:',dust_size)
-    
+    with open(filename,'wb') as f:
+        pickle.dump(system.potentials,f,protocol=2)
+    systems.append(system)
+#%%
+longest_list = []
+for system,side_source in zip(systems,side_sources):
     #calculate Electric field and electric field magnitude
     E_field = system.E_field
     E_field_mag = system.E_field_mag
@@ -56,21 +62,22 @@ for dust_pos in dust_positions:
     #is relatively small, this should not have a large effect, especially
     #as the grid spacing is decreased
     
-    #%%
     central_value = E_field_mag[tuple((np.asarray(E_field_mag.shape))/2)]
     distances = system.grid.x*system.grid.distance_factor
     beam_path = E_field_mag[:,system.potentials.shape[1]/2]
     
     plt.figure()
     plt.plot(distances,beam_path,lw=4,c='#377eb8')
-    plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-    plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
+    plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=20)
+    plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=20)
     plt.autoscale(enable=True, axis='x', tight=True)
     plt.margins(y=0.05)
     plt.gca().tick_params(axis='both',which='major', labelsize=16)
     plt.gca().tick_params(axis='both',which='minor', labelsize=16)
-    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
-    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+    plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)      
+#    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
+#    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
     plt.minorticks_on()
     plt.tight_layout()
     plt.grid()
@@ -84,29 +91,30 @@ for dust_pos in dust_positions:
                             'lw':1},
                 xycoords='data',
                 fontsize=19)
-    
-    side_height = 4.5e5
-    ax.annotate(s=r'$\mathrm{side\ plates}$',
-                xy=(0.23,side_height),
-                xytext=(0.06,7e5),
-                arrowprops={'arrowstyle':'simple',
-                            'color':'k',
-                            'lw':1},
-                xycoords='data',
-                fontsize=19)
-    
-    ax.annotate(s='',
-                xy=(0.47,side_height),
-                xytext=(0.22,7e5),
-                arrowprops={'arrowstyle':'simple',
-                            'color':'k',
-                            'lw':1},
-                xycoords='data',
-                fontsize=19)
+    if side_source:
+        side_height = 4.5e5
+        ax.annotate(s=r'$\mathrm{side\ plates}$',
+                    xy=(0.23,side_height),
+                    xytext=(0.06,7e5),
+                    arrowprops={'arrowstyle':'simple',
+                                'color':'k',
+                                'lw':1},
+                    xycoords='data',
+                    fontsize=19)
+        
+        ax.annotate(s='',
+                    xy=(0.47,side_height),
+                    xytext=(0.22,7e5),
+                    arrowprops={'arrowstyle':'simple',
+                                'color':'k',
+                                'lw':1},
+                    xycoords='data',
+                    fontsize=19)
     plt.show()
     
 #    plt.savefig('EDM_e_mag_cross_section.pdf',bbox_inches='tight')
-    #%%
+    
+    
 #    mask = (distances<0.453) & (distances>0.274)
 #    plt.figure()
 #    plt.plot(distances[mask],beam_path[mask])
@@ -121,13 +129,13 @@ for dust_pos in dust_positions:
 #    plt.minorticks_on()
 #    plt.tight_layout()
 #    plt.show()
-#    
-#    plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
-    #%%
     
-    #%%
+#    plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
+
+    
+
     #tolerances = [0.01,1e-11]
-    tolerances = np.linspace(1e-5,1e-3,10000)
+    tolerances = np.linspace(1e-5,1e-3,80000)
     print('total number of points along x:',beam_path.size)
     
     longest = []
@@ -188,14 +196,15 @@ markers = ['>','D']
 markevery = 0.1     
 ms = 12
 lw = 5
-plt.rc('font', size=15)  
-labels = ['dust\ x=%.2e m'%(dust_positions[0]/1e3),'dust\ x=%.2e m'%(dust_positions[1]/1e3)]
+labels = [r'$\mathrm{with\ side\ plates}$',r'$\mathrm{no\ side\ plates}$']
+plt.rc('font', size=15)   
+print(max(tolerances),'max tol')       
 if overview:
     plt.figure()
     for longest,c,marker,ls,label in zip(longest_list,colours,
                                          markers,linestyles,labels):
-        plt.plot(tolerances[:10000000]*100,longest[:10000000],c=c,ls=ls,marker=marker,markevery=markevery,
-                 label=r'$\mathrm{%s}$' % label,ms=ms,lw=lw)
+        plt.plot(tolerances[:600]*100,longest[:600],c=c,ls=ls,marker=marker,markevery=markevery,
+                 label=label,ms=ms,lw=lw)
         plt.xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=20)
         plt.ylabel(r'$\mathrm{homogeneous\ section\ length\ (m)}$',fontsize=20)
         
@@ -208,9 +217,9 @@ if overview:
     
     plt.gca().tick_params(axis='both', labelsize=16)
     plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
-                               useoffset=False)      
-#    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
-#    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+                               useoffset=False)         
+#    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:r'$\mathrm{%.0e}$'%value))
+#    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:r'$\mathrm{%.1e}$'%value))
     plt.minorticks_on()
     plt.grid()
     plt.tight_layout()
@@ -229,7 +238,7 @@ else:
         ax.grid()
         ax.tick_params(axis='both', labelsize=16)
         ax.ticklabel_format(style='sci',scilimits=(0,0),
-                            useoffset=False)   
+                            useoffset=False)         
         ax.axvline(tolerances[0]*100,c='k',lw=1.5)
         ax.text(0.09,0.84,s=r'$\mathrm{tol=%.2e}$'%(tolerances[0]*100),
                     transform=ax.transAxes,fontsize=16,
@@ -237,12 +246,12 @@ else:
         ax.arrow(0.09,0.87,-0.027,0,transform=ax.transAxes,fc='k', ec='k',
                  head_width=0.032, head_length=0.012,lw=1.7)
         
-#    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
-#    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value if pos%2 else ''))
+#    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:r'$\mathrm{%.2e}$'%value))
+#    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:r'$\mathrm{%.2e}$'%value if pos%2 else ''))
     axes[-1].set_xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=20)
-#    axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+#    axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda value,pos:r'$\mathrm{%.2e}$'%value))
+    
     plt.tight_layout()
     plt.show()
     
 #%%
-print('dust size:',dust_size)

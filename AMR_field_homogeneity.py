@@ -27,10 +27,10 @@ system,dust_size,pos = create_EDM_system((26*factor,3*factor),k,
                                      dust_pos=None)
 print('system created')
 #system.show_setup()
-with open('potentials','rb') as f:    
+with open('potentials2','rb') as f:    
     system.potentials = pickle.load(f)
-system.SOR(tol=1e-16,max_time=1)
-
+system.SOR(tol=1e-16,max_time=1000)
+system.SOR(w=1.,tol=1e-16,max_time=1000)
 #system.show()
 
 #calculate Electric field and electric field magnitude
@@ -57,15 +57,18 @@ distances = system.grid.x*system.grid.distance_factor
 beam_path = E_field_mag[:,system.potentials.shape[1]/2]
 
 plt.figure()
-plt.plot(distances,beam_path,lw=3,c='#377eb8')
-plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
+plt.rc('font', size=15)
+plt.plot(distances,beam_path,lw=4,c='#377eb8')
+plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=20)
+plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=20)
 plt.autoscale(enable=True, axis='x', tight=True)
 plt.margins(y=0.05)
 plt.gca().tick_params(axis='both',which='major', labelsize=16)
 plt.gca().tick_params(axis='both',which='minor', labelsize=16)
-plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
-plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)   
+#plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1f}$'%value))
+#plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
 plt.minorticks_on()
 plt.tight_layout()
 plt.grid()
@@ -78,45 +81,45 @@ ax.annotate(s=r'$\mathrm{central\ plate}$',
                         'color':'k',
                         'lw':1},
             xycoords='data',
-            fontsize=20)
+            fontsize=19)
 
-side_height = 4e5
+side_height = 4.5e5
 ax.annotate(s=r'$\mathrm{side\ plates}$',
-            xy=(0.22,side_height),
+            xy=(0.23,side_height),
             xytext=(0.06,7e5),
             arrowprops={'arrowstyle':'simple',
                         'color':'k',
                         'lw':1},
             xycoords='data',
-            fontsize=20)
+            fontsize=19)
 
 ax.annotate(s='',
-            xy=(0.35,side_height),
-            xytext=(0.06,7e5),
+            xy=(0.47,side_height),
+            xytext=(0.22,7e5),
             arrowprops={'arrowstyle':'simple',
                         'color':'k',
                         'lw':1},
             xycoords='data',
-            fontsize=20)
+            fontsize=19)
 plt.show()
 #%%
 #plt.savefig('EDM_e_mag_cross_section.pdf',bbox_inches='tight')
 
-mask = (distances<0.453) & (distances>0.274)
-plt.figure()
-plt.plot(distances[mask],beam_path[mask])
-plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
-plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
-plt.autoscale(enable=True, axis='x', tight=True)
-
-plt.gca().tick_params(axis='both',which='major', labelsize=16)
-plt.gca().tick_params(axis='both',which='minor', labelsize=16)
-plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
-plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.3e}$'%value))
-plt.minorticks_on()
-plt.tight_layout()
-plt.grid()
-plt.show()
+#mask = (distances<0.453) & (distances>0.274)
+#plt.figure()
+#plt.plot(distances[mask],beam_path[mask])
+#plt.xlabel(r'$\mathrm{x\ (m)}$',fontsize=16)
+#plt.ylabel(r'$\mathrm{| E |\ (V\ m^{-1})}$',fontsize=16)
+#plt.autoscale(enable=True, axis='x', tight=True)
+#
+#plt.gca().tick_params(axis='both',which='major', labelsize=16)
+#plt.gca().tick_params(axis='both',which='minor', labelsize=16)
+#plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+#plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.3e}$'%value))
+#plt.minorticks_on()
+#plt.tight_layout()
+#plt.grid()
+#plt.show()
 
 #plt.savefig('EDM_e_mag_cross_zoom.pdf',bbox_inches='tight')
 #%%
@@ -124,7 +127,7 @@ plt.show()
 #%%
 #tolerances = [0.01,1e-11]
 #tolerances = np.linspace(1e-5,0.9,1000)
-tolerances = np.linspace(1e-5,0.96,1000)
+tolerances = np.linspace(1e-5,01e-3,10000)
 print('total number of points along x:',beam_path.size)
 #get the E field mag at the center of the experiment
 centre_x = max(system.grid.x)/2.
@@ -189,7 +192,7 @@ for reference in reference_values:
 #%%
 
 #%%
-overview = True #if not, then detailed view with a separate subplot for each
+overview = False #if not, then detailed view with a separate subplot for each
                 #source
 #colours =  ['#e41a1c','#377eb8','#4daf4a']
 colours =  ['#e41a1c','#377eb8']
@@ -201,56 +204,59 @@ markevery = 0.1
 ms = 12
 lw = 5
 labels = ['central\ plate','side\ plate']
+plt.rc('font', size=15) 
 if overview:
     plt.figure()
     for longest,c,marker,ls,label in zip(longest_list,colours,
                                          markers,linestyles,labels):
         plt.plot(tolerances*100,longest,c=c,ls=ls,marker=marker,markevery=markevery,
                  label=r'$\mathrm{%s}$' % label,ms=ms,lw=lw)
-        plt.xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=16)
-        plt.ylabel(r'$\mathrm{homogeneous\ section\ length\ (m)}$',fontsize=16)
+        plt.xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=20)
+        plt.ylabel(r'$\mathrm{homogeneous\ section\ length\ (m)}$',fontsize=20)
         
     leg = plt.legend(loc='best')
     ltext  = leg.get_texts()  # all the text.Text instance in the legend
     llines = leg.get_lines()  # all the lines.Line2D instance in the legend
-    plt.setp(ltext, fontsize=16)    # the legend text fontsize
+    plt.setp(ltext, fontsize=20)    # the legend text fontsize
     plt.setp(llines, linewidth=1.5)      # the legend linewidth
     plt.margins(0.05)
     
     plt.gca().tick_params(axis='both', labelsize=16)
-    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
-    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
+    plt.gca().ticklabel_format(style='sci',scilimits=(0,0),
+                        useoffset=False)       
+#    plt.gca().xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.0e}$'%value))
+#    plt.gca().yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.1e}$'%value))
     plt.minorticks_on()
     plt.grid()
     plt.tight_layout()
     plt.show()
     
-    plt.savefig('homogeneity_overview_no_dust.pdf',bbox_inches='tight')
 else:
     fig,axes = plt.subplots(2,1,sharex=True,sharey=False)
     for ax,longest,c,marker,ls,label in zip(axes,longest_list,colours,
                                          markers,linestyles,labels):
         ax.plot(tolerances*100,longest,c=c,ls=ls,
                  label=r'$\mathrm{%s}$' % label,lw=lw)
-        ax.set_ylabel(r'$\mathrm{L_{h}\ (m)}$',fontsize=16)
+        ax.set_ylabel(r'$\mathrm{L_{h}\ (m)}$',fontsize=20)
         ax.minorticks_on()
         ax.margins(0.05)
-        ax.set_title(r'$\mathrm{%s}$' % label,fontsize=16)
+        ax.set_title(r'$\mathrm{%s}$' % label,fontsize=20)
         ax.grid()
-        ax.tick_params(axis='both', labelsize=15)
+        ax.tick_params(axis='both', labelsize=16)
+        ax.ticklabel_format(style='sci',scilimits=(0,0),
+                            useoffset=False)           
         ax.axvline(tolerances[0]*100,c='k',lw=1.5)
-        ax.text(0.09,0.84,s=r'$\mathrm{tol=%.2e}$'%(tolerances[0]*100),
+        ax.text(0.09,0.84,s=r'$\mathrm{tol=%.2e}$'%(tolerances[0]*100)+r'$\ \mathrm{\%}$',
                     transform=ax.transAxes,fontsize=16,
                     bbox=dict(facecolor='white', edgecolor='white'))
         ax.arrow(0.09,0.87,-0.027,0,transform=ax.transAxes,fc='k', ec='k',
                  head_width=0.032, head_length=0.012,lw=1.7)
         
-    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
-    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value if pos%2 else ''))
-    axes[-1].set_xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=16)
-    axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+#    axes[0].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
+#    axes[1].yaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value if pos%2 else ''))
+    axes[-1].set_xlabel(r'$\mathrm{tolerance\ (\%)}$',fontsize=20)
+#    axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda value,pos:'$\mathrm{%.2e}$'%value))
     plt.tight_layout()
     plt.show()
     
-#    plt.savefig('detailed_homogeneity_no_dust.pdf',bbox_inches='tight')
 #%%
